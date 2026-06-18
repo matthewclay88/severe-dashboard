@@ -22,10 +22,10 @@ def get_site_parameters(site):
     url = f"https://metfs1.agron.iastate.edu/data/bufkit/rap/rap_{site.lower()}.buf"
 
     response = requests.get(url, timeout=30)
-response.raise_for_status()
+    response.raise_for_status()
 
-text = response.text
-lines = text.splitlines()
+    text = response.text
+    lines = text.splitlines()
 
     # -------------------------
     # PARSE SOUNDING
