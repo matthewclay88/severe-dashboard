@@ -353,7 +353,7 @@ def get_site_parameters(site):
     # 0-1 KM SRH
     # -------------------------
 
-    srh_pos, srh_neg, srh_total = (
+        srh_pos, srh_neg, srh_total = (
         mpcalc.storm_relative_helicity(
             heights,
             u,
@@ -364,7 +364,7 @@ def get_site_parameters(site):
         )
     )
 
-            results["SRH01_m2s2"] = round(
+    results["SRH01_m2s2"] = round(
         float(srh_total.magnitude),
         1
     )
