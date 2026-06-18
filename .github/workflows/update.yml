@@ -2,8 +2,13 @@ name: Update Severe Dashboard
 
 on:
   workflow_dispatch:
+
   schedule:
-    - cron: "*/5 * * * *"
+    - cron: '*/5 * * * *'
+
+  push:
+    branches:
+      - main
 
 jobs:
   run-dashboard:
