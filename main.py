@@ -28,7 +28,7 @@ def get_site_parameters(site):
     response = requests.get(url, timeout=30)
     response.raise_for_status()
 
-        text = response.text
+    text = response.text
     lines = text.splitlines()
 
     # -------------------------
