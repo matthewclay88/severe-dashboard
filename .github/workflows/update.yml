@@ -1,31 +1,29 @@
 name: Update Severe Dashboard
 
 on:
-workflow_dispatch:
-schedule:
-- cron: '30,35,40,45,50 * * * *'
+  workflow_dispatch:
+  schedule:
+    - cron: '30,35,40,45,50 * * * *'
 
 jobs:
-run-dashboard:
-runs-on: ubuntu-latest
+  run-dashboard:
+    runs-on: ubuntu-latest
 
-```
-steps:
-  - name: Checkout Repository
-    uses: actions/checkout@v4
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-  - name: Set up Python
-    uses: actions/setup-python@v5
-    with:
-      python-version: '3.12'
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
-  - name: Install dependencies
-    run: |
-      python -m pip install --upgrade pip
-      pip install pandas numpy requests metpy gspread google-auth
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas numpy requests metpy gspread google-auth
 
-  - name: Run dashboard script
-    env:
-      GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
-    run: python main.py
-```
+      - name: Run dashboard script
+        env:
+          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+        run: python main.py
