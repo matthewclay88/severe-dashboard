@@ -3,7 +3,7 @@ name: Update Severe Dashboard
 on:
   workflow_dispatch:
   schedule:
-    - cron: '30,35,40,45,50 * * * *'
+  - cron: '*/5 * * * *'
 
 jobs:
   run-dashboard:
