@@ -386,7 +386,8 @@ if __name__ == "__main__":
 )
 
 scopes = [
-    "https://www.googleapis.com/auth/spreadsheets"
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive"
 ]
 
 creds = Credentials.from_service_account_info(
