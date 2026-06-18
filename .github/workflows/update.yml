@@ -7,6 +7,9 @@ jobs:
   run-dashboard:
     runs-on: ubuntu-latest
 
+    env:
+      GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
