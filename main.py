@@ -399,7 +399,7 @@ gc = gspread.authorize(creds)
 
 sheet = gc.open_by_key(
     "11FjM4i1s0SpOE5y5_nPDRzLEsoAPA62keyS06a0G3Fo"
-).worksheet("current")
+).worksheet("Current")
 
 sheet.clear()
 
