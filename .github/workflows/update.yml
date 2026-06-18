@@ -2,13 +2,15 @@ name: Update Severe Dashboard
 
 on:
   workflow_dispatch:
-
   schedule:
-    - cron: '*/5 * * * *'
+    - cron: "*/5 * * * *"
 
 jobs:
   run-dashboard:
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout Repository
@@ -17,7 +19,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: "3.12"
 
       - name: Install dependencies
         run: |
