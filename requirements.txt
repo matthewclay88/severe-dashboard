@@ -1,1 +1,7 @@
-
+metpy
+pandas
+numpy
+requests
+gspread
+google-auth
+scipy
