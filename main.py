@@ -2,6 +2,7 @@ import requests
 import pandas as pd
 import numpy as np
 import metpy.calc as mpcalc
+import sys
 
 from metpy.units import units
 from metpy.calc import (
