@@ -25,7 +25,7 @@ def get_site_parameters(site):
 response.raise_for_status()
 
 text = response.text
-    lines = text.splitlines()
+lines = text.splitlines()
 
     # -------------------------
     # PARSE SOUNDING
