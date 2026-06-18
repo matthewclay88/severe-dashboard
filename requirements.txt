@@ -2,6 +2,7 @@ metpy
 pandas
 numpy
 requests
+scipy
 gspread
 google-auth
-scipy
+google-auth-oauthlib
