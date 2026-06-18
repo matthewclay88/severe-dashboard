@@ -28,31 +28,31 @@ def get_site_parameters(site):
     response = requests.get(url, timeout=30)
     response.raise_for_status()
 
-    text = response.text
+        text = response.text
     lines = text.splitlines()
 
     # -------------------------
-# RAP RUN TIME
-# -------------------------
+    # RAP RUN TIME
+    # -------------------------
 
-run_time = None
+    run_time = None
 
-for line in lines[:50]:
+    for line in lines[:50]:
 
-    if "TIME =" in line:
+        if "TIME =" in line:
 
-        try:
+            try:
 
-            run_time = (
-                line.split("TIME =")[1]
-                .strip()
-                .split()[0]
-            )
+                run_time = (
+                    line.split("TIME =")[1]
+                    .strip()
+                    .split()[0]
+                )
 
-            break
+                break
 
-        except:
-            pass
+            except:
+                pass
 
     # -------------------------
     # PARSE SOUNDING
@@ -364,7 +364,7 @@ for line in lines[:50]:
         )
     )
 
-        results["SRH01_m2s2"] = round(
+            results["SRH01_m2s2"] = round(
         float(srh_total.magnitude),
         1
     )
@@ -376,8 +376,6 @@ for line in lines[:50]:
     # -------------------------
 
     results["RAP_RUN"] = run_time
-
-    return results
 
     return results
 
@@ -410,33 +408,33 @@ if __name__ == "__main__":
             print(f"{site.upper()} FAILED")
             print(e)
 
-    df = pd.DataFrame(all_results)
+        df = pd.DataFrame(all_results)
 
     creds_dict = json.loads(
-    os.environ["GOOGLE_CREDENTIALS"]
-)
+        os.environ["GOOGLE_CREDENTIALS"]
+    )
 
-scopes = [
-    "https://www.googleapis.com/auth/spreadsheets",
-    "https://www.googleapis.com/auth/drive"
-]
+    scopes = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive"
+    ]
 
-creds = Credentials.from_service_account_info(
-    creds_dict,
-    scopes=scopes
-)
+    creds = Credentials.from_service_account_info(
+        creds_dict,
+        scopes=scopes
+    )
 
-gc = gspread.authorize(creds)
+    gc = gspread.authorize(creds)
 
-sheet = gc.open_by_key(
-    "11FjM4i1s0SpOE5y5_nPDRzLEsoAPA62keyS06a0G3Fo"
-).worksheet("Current")
+    sheet = gc.open_by_key(
+        "11FjM4i1s0SpOE5y5_nPDRzLEsoAPA62keyS06a0G3Fo"
+    ).worksheet("Current")
 
-sheet.clear()
+    sheet.clear()
 
-sheet.update(
-    [df.columns.tolist()] +
-    df.values.tolist()
-)
+    sheet.update(
+        [df.columns.tolist()] +
+        df.values.tolist()
+    )
 
-print("Google Sheet updated successfully")
+    print("Google Sheet updated successfully")
