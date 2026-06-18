@@ -3,6 +3,10 @@ import pandas as pd
 import numpy as np
 import metpy.calc as mpcalc
 import sys
+import gspread
+import json
+import os
+from google.oauth2.service_account import Credentials
 
 from metpy.units import units
 from metpy.calc import (
@@ -377,4 +381,28 @@ if __name__ == "__main__":
 
     df = pd.DataFrame(all_results)
 
-    print(df)
+    creds_dict = json.loads(
+    os.environ["GOOGLE_CREDENTIALS"]
+)
+
+scopes = [
+    "https://www.googleapis.com/auth/spreadsheets"
+]
+
+creds = Credentials.from_service_account_info(
+    creds_dict,
+    scopes=scopes
+)
+
+gc = gspread.authorize(creds)
+
+sheet = gc.open("Severe Dashboard").worksheet("current")
+
+sheet.clear()
+
+sheet.update(
+    [df.columns.tolist()] +
+    df.values.tolist()
+)
+
+print("Google Sheet updated successfully")
