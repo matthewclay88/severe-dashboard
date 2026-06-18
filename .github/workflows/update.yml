@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
   schedule:
-  - cron: '15 * * * *'   # hourly is much more reliable than */5
+  - cron: '10 * * * *'   # hourly is much more reliable than */5
 
   push:
     branches:
