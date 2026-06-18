@@ -20,7 +20,10 @@ def get_site_parameters(site):
 
     url = f"https://metfs1.agron.iastate.edu/data/bufkit/rap/rap_{site.lower()}.buf"
 
-    text = requests.get(url).text
+    response = requests.get(url, timeout=30)
+response.raise_for_status()
+
+text = response.text
     lines = text.splitlines()
 
     # -------------------------
@@ -341,37 +344,6 @@ def get_site_parameters(site):
     results["SITE"] = site.upper()
 
     return results
-
-sites = [
-    "kbtv",
-    "kpbg",
-    "kmss",
-    "kslk",
-    "rut",
-    "kmpv",
-    "1v4"
-]
-
-all_results = []
-
-for site in sites:
-
-    try:
-
-        r = get_site_parameters(site)
-
-        all_results.append(r)
-
-        print(f"{site.upper()} OK")
-
-    except Exception as e:
-
-        print(f"{site.upper()} FAILED")
-        print(e)
-
-df = pd.DataFrame(all_results)
-
-df
 
 if __name__ == "__main__":
 
