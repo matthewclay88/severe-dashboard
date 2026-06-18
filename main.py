@@ -32,6 +32,29 @@ def get_site_parameters(site):
     lines = text.splitlines()
 
     # -------------------------
+# RAP RUN TIME
+# -------------------------
+
+run_time = None
+
+for line in lines[:50]:
+
+    if "TIME =" in line:
+
+        try:
+
+            run_time = (
+                line.split("TIME =")[1]
+                .strip()
+                .split()[0]
+            )
+
+            break
+
+        except:
+            pass
+
+    # -------------------------
     # PARSE SOUNDING
     # -------------------------
 
@@ -341,12 +364,20 @@ def get_site_parameters(site):
         )
     )
 
-    results["SRH01_m2s2"] = round(
+        results["SRH01_m2s2"] = round(
         float(srh_total.magnitude),
         1
     )
 
     results["SITE"] = site.upper()
+
+    # -------------------------
+    # RAP RUN TIME
+    # -------------------------
+
+    results["RAP_RUN"] = run_time
+
+    return results
 
     return results
 
