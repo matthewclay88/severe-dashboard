@@ -3,8 +3,8 @@ name: Update Severe Dashboard
 on:
   workflow_dispatch:
 
-  schedule:
-    - cron: "*/15 * * * *"
+schedule:
+  - cron: "0 * * * *"
 
   push:
     branches:
