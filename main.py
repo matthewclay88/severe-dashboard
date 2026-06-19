@@ -105,7 +105,7 @@ def calculate_parameters(sounding):
 # SITES
 # ============================================================
 
-sites = ["kbtv", "kpbg", "kmss", "kslk", "rut", "kmpv", "1v4"]
+sites = ["kbtv", "kpbg", "kmss", "kslk", "rut", "kmpv", "1v4", "kefk]
 
 all_forecast_results = []
 all_current_results  = []
