@@ -108,27 +108,14 @@ def calculate_parameters(sounding):
     )
     results["SRH01_M2S2"] = round(float(srh_total.magnitude), 1)
 
-    # ==========================================================
-    # NEW: Heavy Rain / Flash Flood Parameters
-    # ==========================================================
-
     # ----------------------------------------------------------
-    # MOISTURE
+    # EXISTING: Heavy Rain / Flash Flood Parameters
     # ----------------------------------------------------------
-
-    # Surface dewpoint
     results["SFC_DWPC"] = round(float(sfc_dwpc), 1)
 
-    # 850 mb dewpoint — low-level moisture depth
     idx850 = np.argmin(np.abs(sounding["PRES"] - 850))
     results["DWPC_850"] = round(float(sounding.iloc[idx850]["DWPC"]), 1)
 
-    # ----------------------------------------------------------
-    # FREEZING LEVEL & WARM CLOUD DEPTH
-    # Warm cloud depth (WCD): surface to freezing level.
-    # Deeper WCD = more efficient warm-rain coalescence = higher
-    # rainfall rates. Critical for flash flood potential.
-    # ----------------------------------------------------------
     freezing_level_m = None
     for i in range(len(sounding) - 1):
         t0 = sounding.iloc[i]["TMPC"]
@@ -136,65 +123,44 @@ def calculate_parameters(sounding):
         h0 = sounding.iloc[i]["HGHT"]
         h1 = sounding.iloc[i + 1]["HGHT"]
         if t0 >= 0 >= t1:
-            # Linear interpolation to the 0°C level
             frac = t0 / (t0 - t1)
             freezing_level_m = h0 + frac * (h1 - h0)
             break
 
     if freezing_level_m is not None:
-        results["FRZ_LVL_M"]  = round(freezing_level_m, 0)
-        results["WCD_M"]      = round(freezing_level_m - sfc_hgt, 0)
+        results["FRZ_LVL_M"] = round(freezing_level_m, 0)
+        results["WCD_M"]     = round(freezing_level_m - sfc_hgt, 0)
     else:
-        results["FRZ_LVL_M"]  = None
-        results["WCD_M"]      = None
+        results["FRZ_LVL_M"] = None
+        results["WCD_M"]     = None
 
-    # ----------------------------------------------------------
-    # WET BULB ZERO (WBZ)
-    # Lower WBZ = more melting zone = heavier surface rain rates.
-    # Rule of thumb: WBZ < ~2500 m favors heavy rain over hail.
-    # ----------------------------------------------------------
     try:
         wb_temps = mpcalc.wet_bulb_temperature(pressure, temperature, dewpoint)
         wb_c = wb_temps.to("degC").magnitude
-
         wbz_m = None
         for i in range(len(sounding) - 1):
-            wb0 = wb_c[i]
-            wb1 = wb_c[i + 1]
-            h0  = sounding.iloc[i]["HGHT"]
-            h1  = sounding.iloc[i + 1]["HGHT"]
+            wb0 = wb_c[i]; wb1 = wb_c[i + 1]
+            h0  = sounding.iloc[i]["HGHT"]; h1 = sounding.iloc[i + 1]["HGHT"]
             if wb0 >= 0 >= wb1:
                 frac  = wb0 / (wb0 - wb1)
                 wbz_m = h0 + frac * (h1 - h0)
                 break
-
         results["WBZ_M"] = round(wbz_m, 0) if wbz_m is not None else None
     except Exception:
         results["WBZ_M"] = None
 
-    # ----------------------------------------------------------
-    # LIFTED INDEX (LI)
-    # LI < 0 = unstable; < -4 = strongly unstable.
-    # ----------------------------------------------------------
     try:
         li = mpcalc.lifted_index(pressure, temperature, parcel_prof)
         results["LI"] = round(float(li.magnitude), 1)
     except Exception:
         results["LI"] = None
 
-    # ----------------------------------------------------------
-    # STORM MOTION (Bunkers right-mover) & STORM-RELATIVE WINDS
-    # Slow storm motion is the primary driver of flash flooding.
-    # ----------------------------------------------------------
     try:
         rm_spd = np.sqrt(float(rm[0].magnitude)**2 + float(rm[1].magnitude)**2)
-        results["RM_SPD_KT"] = round(
-            float((rm_spd * units("m/s")).to("knots").magnitude), 1
-        )
+        results["RM_SPD_KT"] = round(float((rm_spd * units("m/s")).to("knots").magnitude), 1)
     except Exception:
         results["RM_SPD_KT"] = None
 
-    # 0–3 km mean wind (steering-layer speed) — slow = training risk
     try:
         idx3km = np.argmin(np.abs(sounding["HGHT"] - (sfc_hgt + 3000)))
         u_03 = float(np.mean(u[:idx3km + 1].magnitude))
@@ -204,30 +170,191 @@ def calculate_parameters(sounding):
     except Exception:
         results["MEAN_WIND_03KM_KT"] = None
 
-    # 850 mb wind speed & direction
     results["WIND_SPD_850_KT"]  = round(float(sounding.iloc[idx850]["SKNT"]), 1)
     results["WIND_DIR_850_DEG"] = round(float(sounding.iloc[idx850]["DRCT"]), 0)
-
-    # 500 mb wind speed & direction
     results["WIND_SPD_500_KT"]  = round(float(sounding.iloc[idx500]["SKNT"]), 1)
     results["WIND_DIR_500_DEG"] = round(float(sounding.iloc[idx500]["DRCT"]), 0)
 
-    # ----------------------------------------------------------
-    # COMPOSITE INDICES
-    # ----------------------------------------------------------
-
-    # CAPE × PWAT product — simple heavy-rain proxy.
-    # Higher values = greater rainfall rate potential.
     cape_pwat = float(mlcape.magnitude) * float(pwat.to("inches").magnitude)
     results["CAPE_PWAT"] = round(cape_pwat, 1)
 
-    # Rainfall Rate Proxy (RRP): MUCAPE × PWAT / max(WCD, 1)
-    # Incorporates warm cloud depth efficiency.
     if results["WCD_M"] and results["WCD_M"] > 0:
         rrp = (float(mucape.magnitude) * float(pwat.to("mm").magnitude)) / results["WCD_M"]
         results["RRP"] = round(rrp, 3)
     else:
         results["RRP"] = None
+
+    # ==========================================================
+    # NEW: Snow Squall Parameters
+    # ==========================================================
+
+    # ----------------------------------------------------------
+    # SURFACE TEMPERATURE & WIND (preconditions)
+    # Sub-freezing surface is required for a snow squall.
+    # Flag borderline zone (-2 to 0°C) for marginal events.
+    # ----------------------------------------------------------
+    results["SFC_TMPC"]    = round(float(sfc_temp), 1)
+    results["SFC_WIND_KT"] = round(float(sounding.iloc[0]["SKNT"]), 1)
+
+    # ----------------------------------------------------------
+    # 700 mb TEMPERATURE
+    # Below -10°C at 700 mb favors snow squall development.
+    # ----------------------------------------------------------
+    results["T700_TMPC"] = round(float(sounding.iloc[idx700]["TMPC"]), 1)
+
+    # ----------------------------------------------------------
+    # LOW-LEVEL CAPE (0–3 km AGL)
+    # Snow squalls run on shallow instability. Standard CAPE
+    # calculated to the tropopause often misses the signal.
+    # Use the layer from surface to ~3 km only.
+    # ----------------------------------------------------------
+    try:
+        idx3km_pres = np.argmin(np.abs(sounding["HGHT"] - (sfc_hgt + 3000)))
+        pres_03  = pressure[:idx3km_pres + 1]
+        temp_03  = temperature[:idx3km_pres + 1]
+        dew_03   = dewpoint[:idx3km_pres + 1]
+        prof_03  = mpcalc.parcel_profile(pres_03, temp_03[0], dew_03[0])
+        llcape, llcin = mpcalc.cape_cin(pres_03, temp_03, dew_03, prof_03)
+        results["LLCAPE_JKG"] = round(float(llcape.magnitude), 1)
+        results["LLCIN_JKG"]  = round(float(llcin.magnitude), 1)
+    except Exception:
+        results["LLCAPE_JKG"] = None
+        results["LLCIN_JKG"]  = None
+
+    # ----------------------------------------------------------
+    # DENDRITIC GROWTH ZONE (DGZ): -12°C to -18°C layer
+    # This is where planar/dendritic snowflakes form most
+    # efficiently. Deeper DGZ + higher RH within it =
+    # heavier snow rates inside the squall.
+    # ----------------------------------------------------------
+    try:
+        dgz_top_m    = None
+        dgz_bot_m    = None
+        dgz_rh_vals  = []
+
+        for i in range(len(sounding) - 1):
+            t0   = sounding.iloc[i]["TMPC"]
+            t1   = sounding.iloc[i + 1]["TMPC"]
+            h0   = sounding.iloc[i]["HGHT"]
+            h1   = sounding.iloc[i + 1]["HGHT"]
+            p0   = sounding.iloc[i]["PRES"]
+            p1   = sounding.iloc[i + 1]["PRES"]
+            td0  = sounding.iloc[i]["DWPC"]
+            td1  = sounding.iloc[i + 1]["DWPC"]
+
+            # DGZ top: where temp crosses -12°C (ascending)
+            if t0 >= -12 >= t1 and dgz_top_m is None:
+                frac       = (t0 - (-12)) / (t0 - t1)
+                dgz_top_m  = h0 + frac * (h1 - h0)
+
+            # DGZ bottom: where temp crosses -18°C (ascending)
+            if t0 >= -18 >= t1 and dgz_bot_m is None:
+                frac       = (t0 - (-18)) / (t0 - t1)
+                dgz_bot_m  = h0 + frac * (h1 - h0)
+
+            # Collect RH within DGZ
+            if -18 <= t0 <= -12:
+                rh = mpcalc.relative_humidity_from_dewpoint(
+                    t0 * units.degC, td0 * units.degC
+                )
+                dgz_rh_vals.append(float(rh.magnitude) * 100)
+
+        if dgz_top_m is not None and dgz_bot_m is not None:
+            results["DGZ_DEPTH_M"]  = round(dgz_bot_m - dgz_top_m, 0)
+        else:
+            results["DGZ_DEPTH_M"]  = None
+
+        results["DGZ_MEAN_RH_PCT"] = round(float(np.mean(dgz_rh_vals)), 1) if dgz_rh_vals else None
+
+    except Exception:
+        results["DGZ_DEPTH_M"]     = None
+        results["DGZ_MEAN_RH_PCT"] = None
+
+    # ----------------------------------------------------------
+    # 850 mb RELATIVE HUMIDITY
+    # Low-level moisture check; >80% supports squall maintenance.
+    # ----------------------------------------------------------
+    try:
+        rh850 = mpcalc.relative_humidity_from_dewpoint(
+            sounding.iloc[idx850]["TMPC"] * units.degC,
+            sounding.iloc[idx850]["DWPC"] * units.degC,
+        )
+        results["RH850_PCT"] = round(float(rh850.magnitude) * 100, 1)
+    except Exception:
+        results["RH850_PCT"] = None
+
+    # ----------------------------------------------------------
+    # 0–1 km BULK SHEAR
+    # Key organizational shear layer for snow squalls.
+    # Values of 15–25 kt support squall-line structures.
+    # ----------------------------------------------------------
+    try:
+        idx1km = np.argmin(np.abs(sounding["HGHT"] - (sfc_hgt + 1000)))
+        bs01   = np.sqrt((u[idx1km] - u[0])**2 + (v[idx1km] - v[0])**2)
+        results["BS01_KT"] = round(float(bs01.to("knots").magnitude), 1)
+    except Exception:
+        results["BS01_KT"] = None
+
+    # ----------------------------------------------------------
+    # 0–3 km BULK SHEAR
+    # Shallow shear depth is more relevant than deep-layer (BS06)
+    # for snow squall organization and intensity.
+    # ----------------------------------------------------------
+    try:
+        bs03 = np.sqrt((u[idx3km_pres] - u[0])**2 + (v[idx3km_pres] - v[0])**2)
+        results["BS03_KT"] = round(float(bs03.to("knots").magnitude), 1)
+    except Exception:
+        results["BS03_KT"] = None
+
+    # ----------------------------------------------------------
+    # SURFACE TO 850 mb DIRECTIONAL WIND SHEAR
+    # Backing winds with height support squall organization
+    # and low-level convergence.
+    # ----------------------------------------------------------
+    try:
+        dir_sfc  = float(sounding.iloc[0]["DRCT"])
+        dir_850  = float(sounding.iloc[idx850]["DRCT"])
+        dir_diff = (dir_850 - dir_sfc + 360) % 360
+        if dir_diff > 180:
+            dir_diff -= 360   # signed: negative = backing
+        results["DIR_SHR_SFC_850"] = round(dir_diff, 0)
+    except Exception:
+        results["DIR_SHR_SFC_850"] = None
+
+    # ----------------------------------------------------------
+    # SNOW SQUALL PARAMETER (SSP)
+    # NWS operational composite. Combines surface-based CAPE,
+    # 0–1 km bulk shear, SBCIN, and a surface temperature
+    # term to weight cold events.
+    #
+    # Formula:
+    #   SSP = (SBCAPE / 100) * (BS01 / 10)
+    #         * ((2000 - |SBCIN|) / 2000) * T_FACTOR
+    #
+    # T_FACTOR:  1.0 if sfc_temp <= -4°C
+    #            scales linearly to 0 at 0°C for borderline temps
+    # SSP >= 1 is the NWS threshold for snow squall potential.
+    # ----------------------------------------------------------
+    try:
+        sbcape_val = float(sbcape.magnitude)
+        sbcin_val  = abs(float(sbcin.magnitude))
+        bs01_val   = results["BS01_KT"] if results["BS01_KT"] is not None else 0.0
+
+        # Temperature factor: full weight at -4°C and colder
+        if sfc_temp <= -4.0:
+            t_factor = 1.0
+        elif sfc_temp < 0.0:
+            t_factor = max(0.0, (0.0 - sfc_temp) / 4.0)
+        else:
+            t_factor = 0.0
+
+        cin_term = max(0.0, (2000.0 - sbcin_val) / 2000.0)
+
+        ssp = (sbcape_val / 100.0) * (bs01_val / 10.0) * cin_term * t_factor
+        results["SSP"] = round(ssp, 2)
+
+    except Exception:
+        results["SSP"] = None
 
     return results
 
