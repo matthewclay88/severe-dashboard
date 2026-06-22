@@ -681,6 +681,8 @@ sm_data = fetch_open_meteo_soil_moisture(SITE_COORDS)
 
 print("Fetching RFC Flash Flood Guidance …")
 ffg_data = fetch_ffg(SITE_COORDS)
+print("FFG TYPE:", type(ffg_data))
+print("FFG DATA:", ffg_data)
 
 print("Fetching NCEI rainfall totals …")
 precip_data = fetch_rainfall_totals(SITE_GHCND)
@@ -766,7 +768,13 @@ for site in sites:
             params["SM_VALID_UTC"]     = sm.get("SM_VALID_UTC")
 
             # RFC Flash Flood Guidance
-            ffg = ffg_data.get(site_key, {})
+            
+            ffg = ffg_data.get(site_key)
+
+            if ffg is None:
+                print(f"WARNING: No FFG dictionary for {site_key}")
+                ffg = {}
+
             params["FFG_01HR_IN"] = ffg.get("FFG_01HR_IN")
             params["FFG_03HR_IN"] = ffg.get("FFG_03HR_IN")
             params["FFG_06HR_IN"] = ffg.get("FFG_06HR_IN")
@@ -778,6 +786,12 @@ for site in sites:
             params["PRECIP_72HR_IN"] = pr.get("PRECIP_72HR_IN")
             params["PRECIP_7DAY_IN"] = pr.get("PRECIP_7DAY_IN")
 
+            if hour == 0:
+                print(site_key)
+                print("SM:", sm)
+                print("FFG:", ffg)
+                print("PR:", pr)
+            
             all_forecast_results.append(params)
 
             if hour == 0:
