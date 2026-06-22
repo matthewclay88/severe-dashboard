@@ -474,15 +474,46 @@ def calculate_parameters(sounding):
     bs06 = np.sqrt((u[idx6] - u[0])**2 + (v[idx6] - v[0])**2)
     results["BS06_KT"] = round(float(bs06.to("knots").magnitude), 1)
 
-    rm, lm, mw = mpcalc.bunkers_storm_motion(pressure, u, v, heights)
+    rm, lm, mw = mpcalc.bunkers_storm_motion(
+        pressure, u, v, heights
+    )
 
+    # 0-1 km SRH
     _, _, srh_total = mpcalc.storm_relative_helicity(
-        heights, u, v,
+        heights,
+        u,
+        v,
         depth=1000 * units.meter,
         storm_u=rm[0],
         storm_v=rm[1],
     )
-    results["SRH01_M2S2"] = round(float(srh_total.magnitude), 1)
+
+    results["SRH01_M2S2"] = round(
+        float(srh_total.magnitude), 1
+    )
+
+    # 0-3 km SRH
+    _, _, srh03 = mpcalc.storm_relative_helicity(
+        heights,
+        u,
+        v,
+        depth=3000 * units.meter,
+        storm_u=rm[0],
+        storm_v=rm[1],
+    )
+
+    results["SRH03_M2S2"] = round(
+        float(srh03.magnitude), 1
+    )
+
+    # Supercell Composite Parameter
+    scp = (
+        (results["MUCAPE_JKG"] / 1000.0)
+        * (results["SRH01_M2S2"] / 50.0)
+        * (results["BS06_KT"] / 20.0)
+    )
+
+    results["SCP"] = round(scp, 2)
 
     # ----------------------------------------------------------
     # Heavy Rain / Flash Flood Parameters
@@ -634,8 +665,13 @@ def calculate_parameters(sounding):
         results["BS01_KT"] = None
 
     try:
-        bs03 = np.sqrt((u[idx3km_pres] - u[0])**2 + (v[idx3km_pres] - v[0])**2)
-        results["BS03_KT"] = round(float(bs03.to("knots").magnitude), 1)
+        bs03 = np.sqrt(
+            (u[idx3] - u[0])**2 +
+            (v[idx3] - v[0])**2
+        )
+        results["BS03_KT"] = round(
+            float(bs03.to("knots").magnitude), 1
+        )
     except Exception:
         results["BS03_KT"] = None
 
