@@ -703,9 +703,8 @@ for site in sites:
 
             # Open-Meteo soil moisture
             sm = sm_data.get(site_key, {})
-            params["SM_0_7CM_M3M3"]    = sm.get("SM_0_7CM_M3M3")
-            params["SM_7_28CM_M3M3"]   = sm.get("SM_7_28CM_M3M3")
-            params["SM_28_100CM_M3M3"] = sm.get("SM_28_100CM_M3M3")
+            params["SM_SURFACE_PCT"] = sm.get("SM_SURFACE_PCT")
+            params["SM_ROOTZONE_PCT"] = sm.get("SM_ROOTZONE_PCT")
             params["SM_VALID_UTC"]     = sm.get("SM_VALID_UTC")
 
             # RFC Flash Flood Guidance
