@@ -109,7 +109,8 @@ def fetch_open_meteo_soil_moisture(site_coords: dict) -> dict:
             resp = requests.get(OPEN_METEO_URL, params=params, timeout=20)
             resp.raise_for_status()
             data = resp.json()
-
+            print(json.dumps(data, indent=2)[:3000])
+            
             hourly = data.get("hourly", {})
             times  = hourly.get("time", [])
             sm0    = hourly.get("soil_moisture_0_to_7cm", [])
