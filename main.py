@@ -4,6 +4,8 @@ import numpy as np
 import gspread
 import json
 import os
+import netCDF4 as nc
+from datetime import datetime, timedelta, timezone
 
 from google.oauth2.service_account import Credentials
 from metpy.units import units
@@ -27,6 +29,402 @@ scopes = [
 
 creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
 gc = gspread.authorize(creds)
+
+# ============================================================
+# SITE METADATA
+# lat/lon for each BUFKIT site — used for gridded data lookups.
+# These are the approximate airport/station coordinates.
+# ============================================================
+
+SITE_COORDS = {
+    "kbtv": (44.4719, -73.1503),   # Burlington, VT
+    "kpbg": (44.6508, -73.4681),   # Plattsburgh, NY
+    "kmss": (44.9353, -74.8456),   # Massena, NY
+    "kslk": (44.3850, -74.2062),   # Saranac Lake, NY
+    "rut":  (43.5294, -72.9497),   # Rutland, VT
+    "kmpv": (44.2035, -72.5623),   # Montpelier, VT
+    "1v4":  (44.8956, -72.8229),   # Hyde Park, VT  (approximate)
+    "kefk": (44.8885, -72.0222),   # Newport, VT
+}
+
+# NCEI GHCND station IDs that correspond to each BUFKIT site.
+# Airport ASOS/AWOS stations give the most complete daily precip records.
+# Format: GHCND:USW000XXXXX  (look these up at ncei.noaa.gov/access/homr)
+SITE_GHCND = {
+    "kbtv": "GHCND:USW00014742",   # Burlington International Airport
+    "kpbg": "GHCND:USW00094725",   # Plattsburgh International Airport
+    "kmss": "GHCND:USW00014733",   # Massena Airport
+    "kslk": "GHCND:USW00004745",   # Adirondack Regional (Saranac Lake)
+    "rut":  "GHCND:USW00014745",   # Rutland State Airport
+    "kmpv": "GHCND:USW00014742",   # Closest major ASOS (BTV); swap if MPV has own GHCND ID
+    "1v4":  "GHCND:USW00014742",   # No dedicated ASOS; use BTV as proxy
+    "kefk": "GHCND:USW00094746",   # Newport State Airport
+}
+
+# ============================================================
+# NEW: NASA SPoRT-LIS SOIL MOISTURE
+# ============================================================
+# Data source: NASA Earthdata / GHRC DAAC OPeNDAP
+#   https://www.earthdata.nasa.gov/data/catalog/ghrc-daac-sportlis-1
+#
+# The SPoRT-LIS CONUS 3-km product is available via OPeNDAP/HTTPS.
+# Set EARTHDATA_TOKEN in your environment (bearer token from
+#   https://urs.earthdata.nasa.gov — generate under "Generate Token").
+#
+# Variables pulled:
+#   SoilMoist_0_10cm_inst  → Volumetric SM, 0–10 cm  (m³/m³)
+#   SoilMoist_0_200cm_inst → Integrated relative SM,  0–200 cm (%)
+#
+# File naming convention (6-hourly):
+#   LIS_HIST_YYYYMMDDHHOO.d01.nc
+# We grab the most recent 00/06/12/18 UTC cycle.
+# ============================================================
+
+LIS_BASE = (
+    "https://opendap.earthdata.nasa.gov/providers/GHRC_CLOUD/collections/"
+    "SPoRT%20Land%20Information%20System%20%28SPoRT-LIS%29/granules/"
+)
+
+# Fallback: direct HTTPS file server (no OPeNDAP library needed, uses netCDF4)
+LIS_HTTPS_BASE = (
+    "https://ghrc.nsstc.nasa.gov/pub/fieldCampaigns/sportlis/data/"
+)
+
+
+def _lis_latest_url() -> str:
+    """
+    Build the URL for the most recent SPoRT-LIS file.
+    Files are 6-hourly; rounds back to the last 00/06/12/18 UTC cycle
+    and assumes ~4 h latency so we subtract one extra cycle when near the edge.
+    """
+    now_utc = datetime.now(timezone.utc)
+    # Round down to last 6-hourly cycle with 4-h latency guard
+    cycle_hour = ((now_utc.hour - 4) // 6) * 6
+    if cycle_hour < 0:
+        now_utc -= timedelta(days=1)
+        cycle_hour = 18
+    cycle_dt = now_utc.replace(hour=cycle_hour, minute=0, second=0, microsecond=0)
+    yyyymmdd = cycle_dt.strftime("%Y%m%d")
+    hh = cycle_dt.strftime("%H")
+    # Public HTTPS granule path (no auth needed for the most recent files
+    # at the SPoRT viewer mirror; Earthdata token used as fallback below)
+    url = (
+        f"https://ghrc.nsstc.nasa.gov/sportlis/data/lis_hist/"
+        f"LIS_HIST_{yyyymmdd}{hh}00.d01.nc"
+    )
+    return url, cycle_dt
+
+
+def fetch_lis_soil_moisture(site_coords: dict) -> dict:
+    """
+    Fetch NASA SPoRT-LIS volumetric (0-10 cm) and relative (0-200 cm)
+    soil moisture at each site lat/lon.
+
+    Returns a dict keyed by site (uppercase) with sub-keys:
+        LIS_VSM_010CM   – volumetric soil moisture 0-10 cm (m³/m³)
+        LIS_RSM_0200CM  – column-integrated relative SM 0-200 cm (%)
+        LIS_VALID_UTC   – valid time string of the LIS file used
+
+    Requires either:
+      - EARTHDATA_TOKEN env var (bearer token from Earthdata URS), OR
+      - Anonymous access if the mirror allows it.
+
+    If the fetch fails, all values are set to None.
+    """
+    results = {site.upper(): {
+        "LIS_VSM_010CM":  None,
+        "LIS_RSM_0200CM": None,
+        "LIS_VALID_UTC":  None,
+    } for site in site_coords}
+
+    token = os.environ.get("eyJ0eXAiOiJKV1QiLCJvcmlnaW4iOiJFYXJ0aGRhdGEgTG9naW4iLCJzaWciOiJlZGxqd3RwdWJrZXlfb3BzIiwiYWxnIjoiUlMyNTYifQ.eyJ0eXBlIjoiVXNlciIsInVpZCI6Im1hdHRoZXdjbGF5ODgiLCJleHAiOjE3ODczMjAyMTIsImlhdCI6MTc4MjEzNjIxMiwiaXNzIjoiaHR0cHM6Ly91cnMuZWFydGhkYXRhLm5hc2EuZ292IiwiaWRlbnRpdHlfcHJvdmlkZXIiOiJlZGxfb3BzIiwiYWNyIjoiZWRsIiwiYXNzdXJhbmNlX2xldmVsIjozfQ.HKuQP_e6rdlJVPfN5dP5H50aCiixvyjuoGdVd0XAVvGQZAYpX8dZfLSpIiQPVivXO-hHwOsSj1hLVOG9mMGInCfugQ-t44fsrNYyYhgHzi399ZyZkIN_jzrLIlA_71yoU0lgFdeypO8whVRIBC7tnohx8yHX-GgJED-uK-DOppgPUmTLMBmJnv1wiW6GNfBa_xFmB57STMjFFjgNVX6qWIQlZJOFeIGGo3evWRxtAwBCHbiwFEvqtQTdmBrGwwC-bkQA7OKeUAS5QDtQjWThaUD0_0slRwWWi2GfBpJcg4HSKyCwrqcwlkNuGxfn7oNb5XUs5XTcaFbqe_qL8bR-Hw", "")
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
+
+    url, cycle_dt = _lis_latest_url()
+    valid_str = cycle_dt.strftime("%Y-%m-%d %HZ")
+
+    print(f"  Fetching SPoRT-LIS: {url}")
+    try:
+        resp = requests.get(url, headers=headers, timeout=60, stream=True)
+        resp.raise_for_status()
+
+        # Write to a temp file so netCDF4 can open it
+        tmp_path = "/tmp/lis_latest.nc"
+        with open(tmp_path, "wb") as f:
+            for chunk in resp.iter_content(chunk_size=1 << 20):
+                f.write(chunk)
+
+        with nc.Dataset(tmp_path) as ds:
+            lats = ds.variables["lat"][:]   # 1-D or 2-D depending on version
+            lons = ds.variables["lon"][:]
+
+            # Flatten to 1-D arrays for nearest-neighbour search
+            if lats.ndim == 2:
+                lat2d = lats
+                lon2d = lons
+            else:
+                lon2d, lat2d = np.meshgrid(lons, lats)
+
+            # Variable names can differ across LIS versions; try common aliases
+            vsm_var = None
+            rsm_var = None
+            for vname in ds.variables:
+                vl = vname.lower()
+                if "soilmoist" in vl and ("0_10" in vl or "010" in vl or "0cm" in vl):
+                    vsm_var = vname
+                if ("soilmoist" in vl or "rsm" in vl) and (
+                    "200" in vl or "0_200" in vl or "column" in vl or "int" in vl
+                ):
+                    rsm_var = vname
+
+            for site, (slat, slon) in site_coords.items():
+                dist = np.sqrt((lat2d - slat) ** 2 + (lon2d - slon) ** 2)
+                row, col = np.unravel_index(np.argmin(dist), dist.shape)
+
+                vsm_val = None
+                rsm_val = None
+                try:
+                    if vsm_var:
+                        v = ds.variables[vsm_var]
+                        # Handle time dimension (pick first/only time step)
+                        arr = v[:]
+                        if arr.ndim == 4:
+                            vsm_val = float(arr[0, 0, row, col])
+                        elif arr.ndim == 3:
+                            vsm_val = float(arr[0, row, col])
+                        else:
+                            vsm_val = float(arr[row, col])
+                        # Mask fill values
+                        if vsm_val > 9e+20 or vsm_val < 0:
+                            vsm_val = None
+                        else:
+                            vsm_val = round(vsm_val, 4)
+                except Exception:
+                    pass
+
+                try:
+                    if rsm_var:
+                        v = ds.variables[rsm_var]
+                        arr = v[:]
+                        if arr.ndim == 4:
+                            rsm_val = float(arr[0, 0, row, col])
+                        elif arr.ndim == 3:
+                            rsm_val = float(arr[0, row, col])
+                        else:
+                            rsm_val = float(arr[row, col])
+                        if rsm_val > 9e+20 or rsm_val < 0:
+                            rsm_val = None
+                        else:
+                            rsm_val = round(rsm_val, 2)
+                except Exception:
+                    pass
+
+                results[site.upper()] = {
+                    "LIS_VSM_010CM":  vsm_val,
+                    "LIS_RSM_0200CM": rsm_val,
+                    "LIS_VALID_UTC":  valid_str,
+                }
+
+    except Exception as e:
+        print(f"  WARNING: SPoRT-LIS fetch failed: {e}")
+
+    return results
+
+
+# ============================================================
+# NEW: RFC FLASH FLOOD GUIDANCE
+# ============================================================
+# Source: NWS/WPC CONUS Gridded FFG ArcGIS MapServer
+#   https://mapservices.weather.noaa.gov/raster/rest/services/
+#          precip/rfc_gridded_ffg/MapServer
+#
+# Layers:
+#   0  = FFG 01-hour
+#   4  = FFG 03-hour
+#   8  = FFG 06-hour
+#   12 = FFG 12-hour  (Mid-Atlantic RFC only; may be null elsewhere)
+#
+# The "identify" operation returns the raster value at a lon/lat point.
+# No authentication required.
+# ============================================================
+
+FFG_BASE = (
+    "https://mapservices.weather.noaa.gov/raster/rest/services/"
+    "precip/rfc_gridded_ffg/MapServer/identify"
+)
+
+# Layer IDs for each duration
+FFG_LAYERS = {"01hr": 0, "03hr": 4, "06hr": 8, "12hr": 12}
+
+
+def fetch_ffg(site_coords: dict) -> dict:
+    """
+    Query the NWS WPC RFC Gridded Flash Flood Guidance for each site.
+    Returns dict keyed by UPPERCASE site with sub-keys:
+        FFG_01HR_IN, FFG_03HR_IN, FFG_06HR_IN, FFG_12HR_IN  (inches)
+    """
+    results = {site.upper(): {
+        "FFG_01HR_IN": None,
+        "FFG_03HR_IN": None,
+        "FFG_06HR_IN": None,
+        "FFG_12HR_IN": None,
+    } for site in site_coords}
+
+    all_layer_ids = ",".join(str(v) for v in FFG_LAYERS.values())
+
+    for site, (lat, lon) in site_coords.items():
+        # The identify endpoint needs geometry in WGS84 (SR 4326)
+        params = {
+            "geometry":     f"{lon},{lat}",
+            "geometryType": "esriGeometryPoint",
+            "sr":           "4326",
+            "layers":       f"all:{all_layer_ids}",
+            "tolerance":    1,
+            "mapExtent":    f"{lon-0.01},{lat-0.01},{lon+0.01},{lat+0.01}",
+            "imageDisplay":  "100,100,96",
+            "returnGeometry": "false",
+            "f":             "json",
+        }
+        try:
+            resp = requests.get(FFG_BASE, params=params, timeout=20)
+            resp.raise_for_status()
+            data = resp.json()
+
+            layer_map = {str(v): k for k, v in FFG_LAYERS.items()}
+            site_result = {}
+            for result in data.get("results", []):
+                lid = str(result.get("layerId", ""))
+                dur = layer_map.get(lid)
+                if dur is None:
+                    continue
+                # Value is returned in the 'attributes' dict as 'Pixel Value'
+                pv = result.get("attributes", {}).get("Pixel Value", None)
+                try:
+                    val = float(pv)
+                    # No-data sentinel varies; WPC uses -9999 or 0 for ocean
+                    val = round(val, 2) if val > 0 else None
+                except (TypeError, ValueError):
+                    val = None
+                site_result[f"FFG_{dur.upper()}_IN"] = val
+
+            # Merge, keeping None for any missing duration
+            results[site.upper()].update(site_result)
+            print(f"  FFG {site.upper()}: {site_result}")
+
+        except Exception as e:
+            print(f"  WARNING: FFG fetch failed for {site.upper()}: {e}")
+
+    return results
+
+
+# ============================================================
+# NEW: MULTI-DAY RAINFALL TOTALS (NCEI GHCND)
+# ============================================================
+# Source: NOAA NCEI Climate Data Online (CDO) API v2
+#   https://www.ncei.noaa.gov/cdo-web/api/v2/data
+#
+# Dataset: GHCND (Global Historical Climatology Network - Daily)
+# Datatype: PRCP  (daily precipitation, tenths of mm → convert to inches)
+#
+# SETUP:
+#   export NCEI_CDO_TOKEN="your_token_here"
+#   Request a free token at: https://www.ncdc.noaa.gov/cdo-web/token
+#
+# Returns 24 h, 72 h, and 7-day rainfall accumulations (inches).
+# NOTE: GHCND reports daily totals with ~1-day latency; the 24 h total
+# is yesterday's observation, 72 h is the sum of the last 3 full days,
+# and 7 day is the sum of the last 7 full days.
+# ============================================================
+
+NCEI_BASE = "https://www.ncei.noaa.gov/cdo-web/api/v2/data"
+
+
+def fetch_rainfall_totals(site_ghcnd: dict) -> dict:
+    """
+    Fetch 24 h, 72 h, and 7-day precipitation totals from NCEI GHCND.
+
+    Requires NCEI_CDO_TOKEN environment variable.
+
+    Returns dict keyed by UPPERCASE site with sub-keys:
+        PRECIP_24HR_IN, PRECIP_72HR_IN, PRECIP_7DAY_IN
+    """
+    token = os.environ.get("fgpdRBwtpUHqwPjfilVKeknGQzAGVdSa", "")
+    if not token:
+        print("  WARNING: NCEI_CDO_TOKEN not set; skipping rainfall totals.")
+        return {
+            site.upper(): {
+                "PRECIP_24HR_IN": None,
+                "PRECIP_72HR_IN": None,
+                "PRECIP_7DAY_IN": None,
+            }
+            for site in site_ghcnd
+        }
+
+    headers = {"token": token}
+    results = {}
+
+    # Date range: last 7 full UTC days ending yesterday
+    today = datetime.now(timezone.utc).date()
+    end_date = today - timedelta(days=1)
+    start_date = today - timedelta(days=7)
+
+    # Deduplicate GHCND IDs → fetch once per unique station, then map back
+    ghcnd_to_sites: dict[str, list[str]] = {}
+    for site, ghcnd_id in site_ghcnd.items():
+        ghcnd_to_sites.setdefault(ghcnd_id, []).append(site.upper())
+
+    # Pre-fill results
+    for site in site_ghcnd:
+        results[site.upper()] = {
+            "PRECIP_24HR_IN": None,
+            "PRECIP_72HR_IN": None,
+            "PRECIP_7DAY_IN": None,
+        }
+
+    for ghcnd_id, sites in ghcnd_to_sites.items():
+        params = {
+            "datasetid":  "GHCND",
+            "stationid":  ghcnd_id,
+            "datatypeid": "PRCP",
+            "startdate":  start_date.isoformat(),
+            "enddate":    end_date.isoformat(),
+            "units":      "metric",   # tenths of mm
+            "limit":      10,
+        }
+        try:
+            resp = requests.get(NCEI_BASE, headers=headers, params=params, timeout=20)
+            resp.raise_for_status()
+            data = resp.json()
+
+            # Build a date→precip_mm dict (values are tenths of mm in metric mode)
+            daily: dict[str, float] = {}
+            for rec in data.get("results", []):
+                date_str = rec["date"][:10]   # YYYY-MM-DD
+                val_tenth_mm = float(rec.get("value", 0) or 0)
+                val_in = round(val_tenth_mm / 10.0 / 25.4, 3)  # tenths mm → inches
+                daily[date_str] = daily.get(date_str, 0) + val_in
+
+            # Sort dates descending (most recent first)
+            sorted_dates = sorted(daily.keys(), reverse=True)
+
+            p24 = daily.get(sorted_dates[0], 0.0) if len(sorted_dates) >= 1 else None
+            p72 = sum(daily.get(d, 0.0) for d in sorted_dates[:3]) if len(sorted_dates) >= 1 else None
+            p7d = sum(daily.get(d, 0.0) for d in sorted_dates[:7]) if len(sorted_dates) >= 1 else None
+
+            record = {
+                "PRECIP_24HR_IN": round(p24, 3) if p24 is not None else None,
+                "PRECIP_72HR_IN": round(p72, 3) if p72 is not None else None,
+                "PRECIP_7DAY_IN": round(p7d, 3) if p7d is not None else None,
+            }
+            print(f"  Precip {ghcnd_id}: {record}")
+            for site in sites:
+                results[site] = record
+
+        except Exception as e:
+            print(f"  WARNING: NCEI precip fetch failed for {ghcnd_id}: {e}")
+
+    return results
+
 
 # ============================================================
 # PARAMETER FUNCTION
@@ -184,30 +582,13 @@ def calculate_parameters(sounding):
     else:
         results["RRP"] = None
 
-    # ==========================================================
-    # NEW: Snow Squall Parameters
-    # ==========================================================
-
     # ----------------------------------------------------------
-    # SURFACE TEMPERATURE & WIND (preconditions)
-    # Sub-freezing surface is required for a snow squall.
-    # Flag borderline zone (-2 to 0°C) for marginal events.
+    # EXISTING: Snow Squall Parameters
     # ----------------------------------------------------------
     results["SFC_TMPC"]    = round(float(sfc_temp), 1)
     results["SFC_WIND_KT"] = round(float(sounding.iloc[0]["SKNT"]), 1)
+    results["T700_TMPC"]   = round(float(sounding.iloc[idx700]["TMPC"]), 1)
 
-    # ----------------------------------------------------------
-    # 700 mb TEMPERATURE
-    # Below -10°C at 700 mb favors snow squall development.
-    # ----------------------------------------------------------
-    results["T700_TMPC"] = round(float(sounding.iloc[idx700]["TMPC"]), 1)
-
-    # ----------------------------------------------------------
-    # LOW-LEVEL CAPE (0–3 km AGL)
-    # Snow squalls run on shallow instability. Standard CAPE
-    # calculated to the tropopause often misses the signal.
-    # Use the layer from surface to ~3 km only.
-    # ----------------------------------------------------------
     try:
         idx3km_pres = np.argmin(np.abs(sounding["HGHT"] - (sfc_hgt + 3000)))
         pres_03  = pressure[:idx3km_pres + 1]
@@ -221,12 +602,6 @@ def calculate_parameters(sounding):
         results["LLCAPE_JKG"] = None
         results["LLCIN_JKG"]  = None
 
-    # ----------------------------------------------------------
-    # DENDRITIC GROWTH ZONE (DGZ): -12°C to -18°C layer
-    # This is where planar/dendritic snowflakes form most
-    # efficiently. Deeper DGZ + higher RH within it =
-    # heavier snow rates inside the squall.
-    # ----------------------------------------------------------
     try:
         dgz_top_m    = None
         dgz_bot_m    = None
@@ -237,22 +612,16 @@ def calculate_parameters(sounding):
             t1   = sounding.iloc[i + 1]["TMPC"]
             h0   = sounding.iloc[i]["HGHT"]
             h1   = sounding.iloc[i + 1]["HGHT"]
-            p0   = sounding.iloc[i]["PRES"]
-            p1   = sounding.iloc[i + 1]["PRES"]
             td0  = sounding.iloc[i]["DWPC"]
-            td1  = sounding.iloc[i + 1]["DWPC"]
 
-            # DGZ top: where temp crosses -12°C (ascending)
             if t0 >= -12 >= t1 and dgz_top_m is None:
                 frac       = (t0 - (-12)) / (t0 - t1)
                 dgz_top_m  = h0 + frac * (h1 - h0)
 
-            # DGZ bottom: where temp crosses -18°C (ascending)
             if t0 >= -18 >= t1 and dgz_bot_m is None:
                 frac       = (t0 - (-18)) / (t0 - t1)
                 dgz_bot_m  = h0 + frac * (h1 - h0)
 
-            # Collect RH within DGZ
             if -18 <= t0 <= -12:
                 rh = mpcalc.relative_humidity_from_dewpoint(
                     t0 * units.degC, td0 * units.degC
@@ -270,10 +639,6 @@ def calculate_parameters(sounding):
         results["DGZ_DEPTH_M"]     = None
         results["DGZ_MEAN_RH_PCT"] = None
 
-    # ----------------------------------------------------------
-    # 850 mb RELATIVE HUMIDITY
-    # Low-level moisture check; >80% supports squall maintenance.
-    # ----------------------------------------------------------
     try:
         rh850 = mpcalc.relative_humidity_from_dewpoint(
             sounding.iloc[idx850]["TMPC"] * units.degC,
@@ -283,11 +648,6 @@ def calculate_parameters(sounding):
     except Exception:
         results["RH850_PCT"] = None
 
-    # ----------------------------------------------------------
-    # 0–1 km BULK SHEAR
-    # Key organizational shear layer for snow squalls.
-    # Values of 15–25 kt support squall-line structures.
-    # ----------------------------------------------------------
     try:
         idx1km = np.argmin(np.abs(sounding["HGHT"] - (sfc_hgt + 1000)))
         bs01   = np.sqrt((u[idx1km] - u[0])**2 + (v[idx1km] - v[0])**2)
@@ -295,52 +655,27 @@ def calculate_parameters(sounding):
     except Exception:
         results["BS01_KT"] = None
 
-    # ----------------------------------------------------------
-    # 0–3 km BULK SHEAR
-    # Shallow shear depth is more relevant than deep-layer (BS06)
-    # for snow squall organization and intensity.
-    # ----------------------------------------------------------
     try:
         bs03 = np.sqrt((u[idx3km_pres] - u[0])**2 + (v[idx3km_pres] - v[0])**2)
         results["BS03_KT"] = round(float(bs03.to("knots").magnitude), 1)
     except Exception:
         results["BS03_KT"] = None
 
-    # ----------------------------------------------------------
-    # SURFACE TO 850 mb DIRECTIONAL WIND SHEAR
-    # Backing winds with height support squall organization
-    # and low-level convergence.
-    # ----------------------------------------------------------
     try:
         dir_sfc  = float(sounding.iloc[0]["DRCT"])
         dir_850  = float(sounding.iloc[idx850]["DRCT"])
         dir_diff = (dir_850 - dir_sfc + 360) % 360
         if dir_diff > 180:
-            dir_diff -= 360   # signed: negative = backing
+            dir_diff -= 360
         results["DIR_SHR_SFC_850"] = round(dir_diff, 0)
     except Exception:
         results["DIR_SHR_SFC_850"] = None
 
-    # ----------------------------------------------------------
-    # SNOW SQUALL PARAMETER (SSP)
-    # NWS operational composite. Combines surface-based CAPE,
-    # 0–1 km bulk shear, SBCIN, and a surface temperature
-    # term to weight cold events.
-    #
-    # Formula:
-    #   SSP = (SBCAPE / 100) * (BS01 / 10)
-    #         * ((2000 - |SBCIN|) / 2000) * T_FACTOR
-    #
-    # T_FACTOR:  1.0 if sfc_temp <= -4°C
-    #            scales linearly to 0 at 0°C for borderline temps
-    # SSP >= 1 is the NWS threshold for snow squall potential.
-    # ----------------------------------------------------------
     try:
         sbcape_val = float(sbcape.magnitude)
         sbcin_val  = abs(float(sbcin.magnitude))
         bs01_val   = results["BS01_KT"] if results["BS01_KT"] is not None else 0.0
 
-        # Temperature factor: full weight at -4°C and colder
         if sfc_temp <= -4.0:
             t_factor = 1.0
         elif sfc_temp < 0.0:
@@ -349,7 +684,6 @@ def calculate_parameters(sounding):
             t_factor = 0.0
 
         cin_term = max(0.0, (2000.0 - sbcin_val) / 2000.0)
-
         ssp = (sbcape_val / 100.0) * (bs01_val / 10.0) * cin_term * t_factor
         results["SSP"] = round(ssp, 2)
 
@@ -358,11 +692,29 @@ def calculate_parameters(sounding):
 
     return results
 
+
 # ============================================================
 # SITES
 # ============================================================
 
 sites = ["kbtv", "kpbg", "kmss", "kslk", "rut", "kmpv", "1v4", "kefk"]
+
+# ============================================================
+# PRE-FETCH GRIDDED / STATION DATA  (once for all sites)
+# ============================================================
+
+print("Fetching NASA SPoRT-LIS soil moisture …")
+lis_data = fetch_lis_soil_moisture(SITE_COORDS)
+
+print("Fetching RFC Flash Flood Guidance …")
+ffg_data = fetch_ffg(SITE_COORDS)
+
+print("Fetching NCEI rainfall totals …")
+precip_data = fetch_rainfall_totals(SITE_GHCND)
+
+# ============================================================
+# SOUNDING LOOP
+# ============================================================
 
 all_forecast_results = []
 all_current_results  = []
@@ -375,7 +727,6 @@ for site in sites:
     response.raise_for_status()
     lines = response.text.splitlines()
 
-    # RAP run time
     rap_run = None
     for line in lines[:50]:
         if "TIME =" in line:
@@ -432,6 +783,29 @@ for site in sites:
             params["SITE"]       = site.upper()
             params["FHOUR"]      = hour
             params["VALID_TIME"] = valid_time
+
+            # ---- Attach gridded / station data to EVERY forecast row ----
+            site_key = site.upper()
+
+            # NASA LIS soil moisture (current land state, same for all hours)
+            lis = lis_data.get(site_key, {})
+            params["LIS_VSM_010CM"]  = lis.get("LIS_VSM_010CM")
+            params["LIS_RSM_0200CM"] = lis.get("LIS_RSM_0200CM")
+            params["LIS_VALID_UTC"]  = lis.get("LIS_VALID_UTC")
+
+            # RFC Flash Flood Guidance (current; same for all forecast hours)
+            ffg = ffg_data.get(site_key, {})
+            params["FFG_01HR_IN"] = ffg.get("FFG_01HR_IN")
+            params["FFG_03HR_IN"] = ffg.get("FFG_03HR_IN")
+            params["FFG_06HR_IN"] = ffg.get("FFG_06HR_IN")
+            params["FFG_12HR_IN"] = ffg.get("FFG_12HR_IN")
+
+            # Observed rainfall totals (same for all forecast hours)
+            pr = precip_data.get(site_key, {})
+            params["PRECIP_24HR_IN"] = pr.get("PRECIP_24HR_IN")
+            params["PRECIP_72HR_IN"] = pr.get("PRECIP_72HR_IN")
+            params["PRECIP_7DAY_IN"] = pr.get("PRECIP_7DAY_IN")
+
             all_forecast_results.append(params)
 
             if hour == 0:
