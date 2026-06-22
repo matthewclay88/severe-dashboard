@@ -192,8 +192,12 @@ FFG_BASE = (
     "precip/rfc_gridded_ffg/MapServer/identify"
 )
 
-FFG_LAYERS = {"01hr": 0, "03hr": 4, "06hr": 8, "12hr": 12}
-
+FFG_LAYERS = {
+    "01hr": 3,
+    "03hr": 7,
+    "06hr": 11,
+    "12hr": 15
+}
 
 def fetch_ffg(site_coords: dict) -> dict:
     """
