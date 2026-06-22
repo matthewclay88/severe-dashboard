@@ -721,6 +721,8 @@ forecast_df["DISPLAY_TIME"] = forecast_df["VALID_TIME"].str[-4:].str[:2] + "Z"
 
 current_df = pd.DataFrame(all_current_results)
 
+forecast_df = forecast_df.replace({np.nan: None})
+current_df = current_df.replace({np.nan: None})
 print(f"\nForecast rows : {len(forecast_df)}")
 print(f"Current rows  : {len(current_df)}")
 
