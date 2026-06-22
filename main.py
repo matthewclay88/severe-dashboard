@@ -261,6 +261,8 @@ def fetch_ffg(site_coords: dict) -> dict:
                 resp.raise_for_status()
 
                 data = resp.json()
+                print(f"\n===== {ghcnd_id} RAW PRECIP =====")
+                print(json.dumps(data, indent=2)[:3000])
 
                 if len(data.get("results", [])) == 0:
                     continue
