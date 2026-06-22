@@ -162,9 +162,11 @@ def fetch_open_meteo_soil_moisture(site_coords: dict) -> dict:
                 "SM_ROOTZONE_PCT": round(rootzone_sm * 100, 1),
                 "SM_VALID_UTC": valid_str,
                 }
-                print(f"  Open-Meteo SM {site.upper()}: "
-                      f"0-7cm={results[site.upper()]['SM_0_7CM_M3M3']} "
-                      f"7-28cm={results[site.upper()]['SM_7_28CM_M3M3']}")
+                print(
+                    f"  Open-Meteo SM {site.upper()}: "
+                    f"Surface={results[site.upper()]['SM_SURFACE_PCT']}% "
+                    f"Root={results[site.upper()]['SM_ROOTZONE_PCT']}%"
+                )
             else:
                 print(f"  WARNING: No valid Open-Meteo SM time found for {site.upper()}")
 
@@ -233,6 +235,9 @@ def fetch_ffg(site_coords: dict) -> dict:
             resp = requests.get(FFG_BASE, params=params, timeout=20)
             resp.raise_for_status()
             data = resp.json()
+            if site.upper() == "KBTV":
+                print("\n===== KBTV FFG RAW RESPONSE =====")
+                print(json.dumps(data, indent=2)[:5000])
 
             layer_map = {str(v): k for k, v in FFG_LAYERS.items()}
             site_result = {}
