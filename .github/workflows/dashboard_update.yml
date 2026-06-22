@@ -37,4 +37,5 @@ jobs:
       - name: Run dashboard script
         env:
           GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+          NCEI_CDO_TOKEN: ${{ secrets.NCEI_CDO_TOKEN }}
         run: python main.py
