@@ -220,7 +220,7 @@ def fetch_ffg(site_coords: dict) -> dict:
 
     for site, (lat, lon) in site_coords.items():
         params = {
-            "geometry": f"{lon+0.05},{lat}"
+            "geometry": f"{lon+0.05},{lat}",
             "geometryType":  "esriGeometryPoint",
             "sr":            "4326",
             "layers":        f"all:{all_layer_ids}",
