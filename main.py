@@ -117,7 +117,6 @@ def fetch_open_meteo_soil_moisture(site_coords: dict) -> dict:
             data = resp.json()
             if site.upper() == "KBTV":
                 import json
-                print(f"\n===== {duration} =====")
                 print(json.dumps(data, indent=2)[:5000])
             
             hourly = data.get("hourly", {})
@@ -231,6 +230,12 @@ def fetch_ffg(site_coords: dict) -> dict:
             "returnGeometry": "false",
             "f":             "json",
         }
+
+        print(
+            f"FFG REQUEST: {site} "
+            f"lat={lat} lon={lon}"
+        )
+        
         try:
             resp = requests.get(FFG_BASE, params=params, timeout=20)
             resp.raise_for_status()
