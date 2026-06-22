@@ -304,9 +304,11 @@ def fetch_ffg(site_coords: dict) -> dict:
         results[site.upper()].update(site_result)
 
         print(
-            f"FFG {site.upper()}: "
+             f"FFG {site.upper()}: "
             f"{results[site.upper()]}"
         )
+
+    return results
 
 
 # ============================================================
