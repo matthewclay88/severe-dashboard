@@ -218,60 +218,95 @@ def fetch_ffg(site_coords: dict) -> dict:
 
     all_layer_ids = ",".join(str(v) for v in FFG_LAYERS.values())
 
+    OFFSETS = [
+    (0.00, 0.00),
+    (0.05, 0.00),
+    (-0.05, 0.00),
+    (0.00, 0.05),
+    (0.00, -0.05),
+    ]
+
     for site, (lat, lon) in site_coords.items():
-        params = {
-            "geometry": f"{lon+0.05},{lat}",
-            "geometryType":  "esriGeometryPoint",
-            "sr":            "4326",
-            "layers":        f"all:{all_layer_ids}",
-            "tolerance":     1,
-            "mapExtent":     f"{lon-0.01},{lat-0.01},{lon+0.01},{lat+0.01}",
-            "imageDisplay":  "100,100,96",
-            "returnGeometry": "false",
-            "f":             "json",
-        }
+
+        site_result = {}
+
+        for dlon, dlat in OFFSETS:
+
+            test_lon = lon + dlon
+            test_lat = lat + dlat
+
+            params = {
+                "geometry": f"{test_lon},{test_lat}",
+                "geometryType": "esriGeometryPoint",
+                "sr": "4326",
+                "layers": f"all:{all_layer_ids}",
+                "tolerance": 1,
+                "mapExtent": (
+                    f"{test_lon-0.01},{test_lat-0.01},"
+                    f"{test_lon+0.01},{test_lat+0.01}"
+                ),
+                "imageDisplay": "100,100,96",
+                "returnGeometry": "false",
+                "f": "json",
+            }
+
+            try:
+
+                resp = requests.get(
+                    FFG_BASE,
+                    params=params,
+                    timeout=20
+                )
+
+                resp.raise_for_status()
+
+                data = resp.json()
+
+                if len(data.get("results", [])) == 0:
+                    continue
+
+                layer_map = {str(v): k for k, v in FFG_LAYERS.items()}
+
+                for result in data.get("results", []):
+
+                    lid = str(result.get("layerId", ""))
+
+                    dur = layer_map.get(lid)
+
+                    if dur is None:
+                        continue
+
+                    pv = (
+                        result.get("attributes", {})
+                        .get("Service Pixel Value")
+                    )
+
+                    try:
+                        val_mm = float(pv)
+
+                        val_in = round(val_mm / 25.4, 2)
+
+                    except:
+                        val_in = None
+
+                    site_result[f"FFG_{dur.upper()}_IN"] = val_in
+
+                if site_result:
+                    print(
+                        f"{site.upper()} FOUND "
+                        f"using offset {dlon},{dlat}"
+                    )
+                    break
+
+            except Exception:
+                pass
+
+        results[site.upper()].update(site_result)
 
         print(
-            f"FFG REQUEST: {site} "
-            f"lat={lat} lon={lon}"
+            f"FFG {site.upper()}: "
+            f"{results[site.upper()]}"
         )
-        
-        try:
-            resp = requests.get(FFG_BASE, params=params, timeout=20)
-            resp.raise_for_status()
-            data = resp.json()
-            if site.upper() == "KBTV":
-                print("\n===== KBTV FFG RAW RESPONSE =====")
-                print(json.dumps(data, indent=2)[:5000])
-
-            layer_map = {str(v): k for k, v in FFG_LAYERS.items()}
-            site_result = {}
-            for result in data.get("results", []):
-                lid = str(result.get("layerId", ""))
-                dur = layer_map.get(lid)
-                if dur is None:
-                    continue
-                pv = result.get("attributes", {}).get("Service Pixel Value", None)
-                try:
-                    val = float(pv)
-                    val = round(val, 2) if val > 0 else None
-                except (TypeError, ValueError):
-                    val = None
-                if site.upper() in ["RUT", "KMPV"]:
-                    print(
-                        site.upper(),
-                        dur,
-                        result.get("attributes", {}).get("Service Pixel Value")
-                    )
-                site_result[f"FFG_{dur.upper()}_IN"] = val
-
-            results[site.upper()].update(site_result)
-            print(f"  FFG {site.upper()}: {site_result}")
-
-        except Exception as e:
-            print(f"  WARNING: FFG fetch failed for {site.upper()}: {e}")
-
-    return results
 
 
 # ============================================================
