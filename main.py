@@ -83,18 +83,19 @@ def fetch_open_meteo_soil_moisture(site_coords: dict) -> dict:
     for each site lat/lon. Uses the most recent available hourly value.
 
     Returns a dict keyed by UPPERCASE site with sub-keys:
-        SM_0_7CM_M3M3    – volumetric SM 0–7 cm   (m³/m³)
-        SM_7_28CM_M3M3   – volumetric SM 7–28 cm  (m³/m³)
-        SM_28_100CM_M3M3 – volumetric SM 28–100 cm (m³/m³)
+        sm_0_1 = hourly.get("soil_moisture_0_to_1cm", [])
+        sm_1_3 = hourly.get("soil_moisture_1_to_3cm", [])
+        sm_3_9 = hourly.get("soil_moisture_3_to_9cm", [])
+        sm_9_27 = hourly.get("soil_moisture_9_to_27cm", [])
+        sm_27_81 = hourly.get("soil_moisture_27_to_81cm", [])
         SM_VALID_UTC     – valid time of the value used
 
     No authentication required.
     """
     results = {site.upper(): {
-        "SM_0_7CM_M3M3":    None,
-        "SM_7_28CM_M3M3":   None,
-        "SM_28_100CM_M3M3": None,
-        "SM_VALID_UTC":     None,
+        "SM_SURFACE_PCT": None,
+        "SM_ROOTZONE_PCT": None,
+        "SM_VALID_UTC": None,
     } for site in site_coords}
 
     for site, (lat, lon) in site_coords.items():
@@ -118,9 +119,11 @@ def fetch_open_meteo_soil_moisture(site_coords: dict) -> dict:
             
             hourly = data.get("hourly", {})
             times  = hourly.get("time", [])
-            sm0    = hourly.get("soil_moisture_0_to_7cm", [])
-            sm7    = hourly.get("soil_moisture_7_to_28cm", [])
-            sm28   = hourly.get("soil_moisture_28_to_100cm", [])
+            sm_0_1   = hourly.get("soil_moisture_0_to_1cm", [])
+            sm_1_3   = hourly.get("soil_moisture_1_to_3cm", [])
+            sm_3_9   = hourly.get("soil_moisture_3_to_9cm", [])
+            sm_9_27  = hourly.get("soil_moisture_9_to_27cm", [])
+            sm_27_81 = hourly.get("soil_moisture_27_to_81cm", [])
 
             # Find the most recent non-null value
             now_utc = datetime.now(timezone.utc)
@@ -140,11 +143,21 @@ def fetch_open_meteo_soil_moisture(site_coords: dict) -> dict:
                     except Exception:
                         return None
 
+                surface_sm = np.mean([
+                    safe_float(sm_0_1, best_idx),
+                    safe_float(sm_1_3, best_idx),
+                    safe_float(sm_3_9, best_idx)
+                ])
+
+                rootzone_sm = np.mean([
+                safe_float(sm_9_27, best_idx),
+                safe_float(sm_27_81, best_idx)
+                ])
+
                 results[site.upper()] = {
-                    "SM_0_7CM_M3M3":    safe_float(sm0,  best_idx),
-                    "SM_7_28CM_M3M3":   safe_float(sm7,  best_idx),
-                    "SM_28_100CM_M3M3": safe_float(sm28, best_idx),
-                    "SM_VALID_UTC":     valid_str,
+                "SM_SURFACE_PCT": round(surface_sm * 100, 1),
+                "SM_ROOTZONE_PCT": round(rootzone_sm * 100, 1),
+                "SM_VALID_UTC": valid_str,
                 }
                 print(f"  Open-Meteo SM {site.upper()}: "
                       f"0-7cm={results[site.upper()]['SM_0_7CM_M3M3']} "
