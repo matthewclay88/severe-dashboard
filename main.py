@@ -252,6 +252,12 @@ def fetch_ffg(site_coords: dict) -> dict:
                     val = round(val, 2) if val > 0 else None
                 except (TypeError, ValueError):
                     val = None
+                if site.upper() in ["RUT", "KMPV"]:
+                    print(
+                        site.upper(),
+                        dur,
+                        result.get("attributes", {}).get("Service Pixel Value")
+                    )
                 site_result[f"FFG_{dur.upper()}_IN"] = val
 
             results[site.upper()].update(site_result)
