@@ -99,12 +99,17 @@ def fetch_open_meteo_soil_moisture(site_coords: dict) -> dict:
 
     for site, (lat, lon) in site_coords.items():
         params = {
-            "latitude":   lat,
-            "longitude":  lon,
-            "hourly":     "soil_moisture_0_to_7cm,soil_moisture_7_to_28cm,soil_moisture_28_to_100cm",
-            "timezone":   "UTC",
-            "forecast_days": 1,
-        }
+    "latitude": lat,
+    "longitude": lon,
+    "hourly":
+        "soil_moisture_0_to_1cm,"
+        "soil_moisture_1_to_3cm,"
+        "soil_moisture_3_to_9cm,"
+        "soil_moisture_9_to_27cm,"
+        "soil_moisture_27_to_81cm",
+    "timezone": "UTC",
+    "forecast_days": 1,
+}
         try:
             resp = requests.get(OPEN_METEO_URL, params=params, timeout=20)
             resp.raise_for_status()
