@@ -246,7 +246,7 @@ def fetch_ffg(site_coords: dict) -> dict:
                 dur = layer_map.get(lid)
                 if dur is None:
                     continue
-                pv = result.get("attributes", {}).get("Pixel Value", None)
+                pv = result.get("attributes", {}).get("Service Pixel Value", None)
                 try:
                     val = float(pv)
                     val = round(val, 2) if val > 0 else None
