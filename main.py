@@ -738,7 +738,7 @@ all_current_results  = []
 for site in sites:
     print(f"Processing {site.upper()}")
 
-    url = f"https://mtarchive.geol.iastate.edu/2026/06/18/bufkit/16/rap/rap_{site}.buf"
+    url = f"https://metfs1.agron.iastate.edu/data/bufkit/rap/rap_{site}.buf"
     response = requests.get(url, timeout=30)
     response.raise_for_status()
     lines = response.text.splitlines()
