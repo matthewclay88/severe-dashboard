@@ -30,6 +30,16 @@ creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
 gc = gspread.authorize(creds)
 
 # ============================================================
+# MODELS + FORECAST-HOUR CAP
+# ============================================================
+# IEM/mtarchive BUFKIT layout: .../data/bufkit/{model}/{model}_{site}.buf
+# Confirmed available model folders: rap, hrrr, nam, nam4km, namm, gfs, gfsm
+# ============================================================
+
+MODELS = ["rap", "hrrr", "nam", "gfs"]
+MAX_FORECAST_HOURS = 60  # cap per model; NAM/GFS otherwise run out to 84-384h
+
+# ============================================================
 # SITE METADATA
 # lat/lon for each BUFKIT site — used for gridded data lookups.
 # These are the approximate airport/station coordinates.
@@ -61,18 +71,6 @@ SITE_GHCND = {
 # ============================================================
 # OPEN-METEO SOIL MOISTURE
 # ============================================================
-# Source: Open-Meteo Land Data Assimilation (ERA5-Land based)
-#   https://open-meteo.com/en/docs/historical-weather-api
-#
-# No API key required — free and open access.
-#
-# Variables:
-#   soil_moisture_0_to_7cm   – Volumetric SM, 0–7 cm  (m³/m³)
-#   soil_moisture_7_to_28cm  – Volumetric SM, 7–28 cm (m³/m³)
-#   soil_moisture_28_to_100cm – Volumetric SM, 28–100 cm (m³/m³)
-#
-# We fetch the most recent hourly value for each site.
-# ============================================================
 
 OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
 
@@ -81,16 +79,7 @@ def fetch_open_meteo_soil_moisture(site_coords: dict) -> dict:
     """
     Fetch Open-Meteo volumetric soil moisture at three depth layers
     for each site lat/lon. Uses the most recent available hourly value.
-
-    Returns a dict keyed by UPPERCASE site with sub-keys:
-        sm_0_1 = hourly.get("soil_moisture_0_to_1cm", [])
-        sm_1_3 = hourly.get("soil_moisture_1_to_3cm", [])
-        sm_3_9 = hourly.get("soil_moisture_3_to_9cm", [])
-        sm_9_27 = hourly.get("soil_moisture_9_to_27cm", [])
-        sm_27_81 = hourly.get("soil_moisture_27_to_81cm", [])
-        SM_VALID_UTC     – valid time of the value used
-
-    No authentication required.
+    Site-based only — not model-dependent, so fetched once per run.
     """
     results = {site.upper(): {
         "SM_SURFACE_PCT": None,
@@ -100,25 +89,22 @@ def fetch_open_meteo_soil_moisture(site_coords: dict) -> dict:
 
     for site, (lat, lon) in site_coords.items():
         params = {
-    "latitude": lat,
-    "longitude": lon,
-    "hourly":
-        "soil_moisture_0_to_1cm,"
-        "soil_moisture_1_to_3cm,"
-        "soil_moisture_3_to_9cm,"
-        "soil_moisture_9_to_27cm,"
-        "soil_moisture_27_to_81cm",
-    "timezone": "UTC",
-    "forecast_days": 1,
-}
+            "latitude": lat,
+            "longitude": lon,
+            "hourly":
+                "soil_moisture_0_to_1cm,"
+                "soil_moisture_1_to_3cm,"
+                "soil_moisture_3_to_9cm,"
+                "soil_moisture_9_to_27cm,"
+                "soil_moisture_27_to_81cm",
+            "timezone": "UTC",
+            "forecast_days": 1,
+        }
         try:
             resp = requests.get(OPEN_METEO_URL, params=params, timeout=20)
             resp.raise_for_status()
             data = resp.json()
-            if site.upper() == "KBTV":
-                import json
-                print(json.dumps(data, indent=2)[:5000])
-            
+
             hourly = data.get("hourly", {})
             times  = hourly.get("time", [])
             sm_0_1   = hourly.get("soil_moisture_0_to_1cm", [])
@@ -127,7 +113,6 @@ def fetch_open_meteo_soil_moisture(site_coords: dict) -> dict:
             sm_9_27  = hourly.get("soil_moisture_9_to_27cm", [])
             sm_27_81 = hourly.get("soil_moisture_27_to_81cm", [])
 
-            # Find the most recent non-null value
             now_utc = datetime.now(timezone.utc)
             best_idx = None
             for i, t_str in enumerate(times):
@@ -152,14 +137,14 @@ def fetch_open_meteo_soil_moisture(site_coords: dict) -> dict:
                 ])
 
                 rootzone_sm = np.mean([
-                safe_float(sm_9_27, best_idx),
-                safe_float(sm_27_81, best_idx)
+                    safe_float(sm_9_27, best_idx),
+                    safe_float(sm_27_81, best_idx)
                 ])
 
                 results[site.upper()] = {
-                "SM_SURFACE_PCT": round(surface_sm * 100, 1),
-                "SM_ROOTZONE_PCT": round(rootzone_sm * 100, 1),
-                "SM_VALID_UTC": valid_str,
+                    "SM_SURFACE_PCT": round(surface_sm * 100, 1),
+                    "SM_ROOTZONE_PCT": round(rootzone_sm * 100, 1),
+                    "SM_VALID_UTC": valid_str,
                 }
                 print(
                     f"  Open-Meteo SM {site.upper()}: "
@@ -178,18 +163,6 @@ def fetch_open_meteo_soil_moisture(site_coords: dict) -> dict:
 # ============================================================
 # RFC FLASH FLOOD GUIDANCE
 # ============================================================
-# Source: NWS/WPC CONUS Gridded FFG ArcGIS MapServer
-#   https://mapservices.weather.noaa.gov/raster/rest/services/
-#          precip/rfc_gridded_ffg/MapServer
-#
-# Layers:
-#   0  = FFG 01-hour
-#   4  = FFG 03-hour
-#   8  = FFG 06-hour
-#   12 = FFG 12-hour
-#
-# No authentication required.
-# ============================================================
 
 FFG_BASE = (
     "https://mapservices.weather.noaa.gov/raster/rest/services/"
@@ -203,11 +176,11 @@ FFG_LAYERS = {
     "12hr": 15
 }
 
+
 def fetch_ffg(site_coords: dict) -> dict:
     """
     Query the NWS WPC RFC Gridded Flash Flood Guidance for each site.
-    Returns dict keyed by UPPERCASE site with sub-keys:
-        FFG_01HR_IN, FFG_03HR_IN, FFG_06HR_IN, FFG_12HR_IN  (inches)
+    Site-based only — not model-dependent, so fetched once per run.
     """
     results = {site.upper(): {
         "FFG_01HR_IN": None,
@@ -219,19 +192,17 @@ def fetch_ffg(site_coords: dict) -> dict:
     all_layer_ids = ",".join(str(v) for v in FFG_LAYERS.values())
 
     OFFSETS = [
-    (0.00, 0.00),
-    (0.05, 0.00),
-    (-0.05, 0.00),
-    (0.00, 0.05),
-    (0.00, -0.05),
+        (0.00, 0.00),
+        (0.05, 0.00),
+        (-0.05, 0.00),
+        (0.00, 0.05),
+        (0.00, -0.05),
     ]
 
     for site, (lat, lon) in site_coords.items():
-
         site_result = {}
 
         for dlon, dlat in OFFSETS:
-
             test_lon = lon + dlon
             test_lat = lat + dlat
 
@@ -251,31 +222,18 @@ def fetch_ffg(site_coords: dict) -> dict:
             }
 
             try:
-
-                resp = requests.get(
-                    FFG_BASE,
-                    params=params,
-                    timeout=20
-                )
-
+                resp = requests.get(FFG_BASE, params=params, timeout=20)
                 resp.raise_for_status()
-
                 data = resp.json()
-                if site.upper() == "KBTV":
-                    print("\n===== KBTV FFG RAW RESPONSE =====")
-                    print(json.dumps(data, indent=2)[:3000])
-                    
+
                 if len(data.get("results", [])) == 0:
                     continue
 
                 layer_map = {str(v): k for k, v in FFG_LAYERS.items()}
 
                 for result in data.get("results", []):
-
                     lid = str(result.get("layerId", ""))
-
                     dur = layer_map.get(lid)
-
                     if dur is None:
                         continue
 
@@ -286,42 +244,27 @@ def fetch_ffg(site_coords: dict) -> dict:
 
                     try:
                         val_mm = float(pv)
-
                         val_in = round(val_mm / 25.4, 2)
-
-                    except:
+                    except Exception:
                         val_in = None
 
                     site_result[f"FFG_{dur.upper()}_IN"] = val_in
 
                 if site_result:
-                    print(
-                        f"{site.upper()} FOUND "
-                        f"using offset {dlon},{dlat}"
-                    )
+                    print(f"{site.upper()} FOUND using offset {dlon},{dlat}")
                     break
 
             except Exception:
                 pass
 
         results[site.upper()].update(site_result)
-
-        print(
-             f"FFG {site.upper()}: "
-            f"{results[site.upper()]}"
-        )
+        print(f"FFG {site.upper()}: {results[site.upper()]}")
 
     return results
 
 
 # ============================================================
 # MULTI-DAY RAINFALL TOTALS (NCEI GHCND)
-# ============================================================
-# Source: NOAA NCEI Climate Data Online (CDO) API v2
-#   https://www.ncei.noaa.gov/cdo-web/api/v2/data
-#
-# Requires: NCEI_CDO_TOKEN environment variable
-#   Request a free token at: https://www.ncdc.noaa.gov/cdo-web/token
 # ============================================================
 
 NCEI_BASE = "https://www.ncei.noaa.gov/cdo-web/api/v2/data"
@@ -330,6 +273,7 @@ NCEI_BASE = "https://www.ncei.noaa.gov/cdo-web/api/v2/data"
 def fetch_rainfall_totals(site_ghcnd: dict) -> dict:
     """
     Fetch 24 h, 72 h, and 7-day precipitation totals from NCEI GHCND.
+    Site-based only — not model-dependent, so fetched once per run.
     """
     token = os.environ.get("NCEI_CDO_TOKEN", "")
     if not token:
@@ -405,7 +349,8 @@ def fetch_rainfall_totals(site_ghcnd: dict) -> dict:
 
 
 # ============================================================
-# PARAMETER FUNCTION
+# PARAMETER FUNCTION (unchanged — BUFKIT format is generic
+# across models, so this needs no per-model modification)
 # ============================================================
 
 def calculate_parameters(sounding):
@@ -427,9 +372,6 @@ def calculate_parameters(sounding):
     sfc_hgt  = sounding.iloc[0]["HGHT"]
     sfc_dwpc = sounding.iloc[0]["DWPC"]
 
-    # ----------------------------------------------------------
-    # Thermodynamic
-    # ----------------------------------------------------------
     pwat          = precipitable_water(pressure, dewpoint)
     mucape, mucin = most_unstable_cape_cin(pressure, temperature, dewpoint)
     mlcape, mlcin = mixed_layer_cape_cin(pressure, temperature, dewpoint)
@@ -445,16 +387,10 @@ def calculate_parameters(sounding):
     results["SBCIN_JKG"]  = round(float(sbcin.magnitude), 1)
     results["DCAPE_JKG"]  = round(float(dcape.magnitude), 1)
 
-    # ----------------------------------------------------------
-    # LCL
-    # ----------------------------------------------------------
     lcl_pressure, _ = mpcalc.lcl(pressure[0], temperature[0], dewpoint[0])
     lcl_idx = np.argmin(np.abs(sounding["PRES"] - lcl_pressure.magnitude))
     results["LCL_M"] = round(float(sounding.iloc[lcl_idx]["HGHT"]), 0)
 
-    # ----------------------------------------------------------
-    # Lapse rates
-    # ----------------------------------------------------------
     idx3 = np.argmin(np.abs(sounding["HGHT"] - (sfc_hgt + 3000)))
     lr03 = (sfc_temp - sounding.iloc[idx3]["TMPC"]) / ((sounding.iloc[idx3]["HGHT"] - sfc_hgt) / 1000)
     results["LR03_CKM"] = round(float(lr03), 2)
@@ -467,57 +403,31 @@ def calculate_parameters(sounding):
     )
     results["LR75_CKM"] = round(float(lr75), 2)
 
-    # ----------------------------------------------------------
-    # Wind / shear / SRH
-    # ----------------------------------------------------------
     idx6 = np.argmin(np.abs(sounding["HGHT"] - (sfc_hgt + 6000)))
     bs06 = np.sqrt((u[idx6] - u[0])**2 + (v[idx6] - v[0])**2)
     results["BS06_KT"] = round(float(bs06.to("knots").magnitude), 1)
 
-    rm, lm, mw = mpcalc.bunkers_storm_motion(
-        pressure, u, v, heights
-    )
+    rm, lm, mw = mpcalc.bunkers_storm_motion(pressure, u, v, heights)
 
-    # 0-1 km SRH
     _, _, srh_total = mpcalc.storm_relative_helicity(
-        heights,
-        u,
-        v,
-        depth=1000 * units.meter,
-        storm_u=rm[0],
-        storm_v=rm[1],
+        heights, u, v, depth=1000 * units.meter,
+        storm_u=rm[0], storm_v=rm[1],
     )
+    results["SRH01_M2S2"] = round(float(srh_total.magnitude), 1)
 
-    results["SRH01_M2S2"] = round(
-        float(srh_total.magnitude), 1
-    )
-
-    # 0-3 km SRH
     _, _, srh03 = mpcalc.storm_relative_helicity(
-        heights,
-        u,
-        v,
-        depth=3000 * units.meter,
-        storm_u=rm[0],
-        storm_v=rm[1],
+        heights, u, v, depth=3000 * units.meter,
+        storm_u=rm[0], storm_v=rm[1],
     )
+    results["SRH03_M2S2"] = round(float(srh03.magnitude), 1)
 
-    results["SRH03_M2S2"] = round(
-        float(srh03.magnitude), 1
-    )
-
-    # Supercell Composite Parameter
     scp = (
         (results["MUCAPE_JKG"] / 1000.0)
         * (results["SRH01_M2S2"] / 50.0)
         * (results["BS06_KT"] / 20.0)
     )
-
     results["SCP"] = round(scp, 2)
 
-    # ----------------------------------------------------------
-    # Heavy Rain / Flash Flood Parameters
-    # ----------------------------------------------------------
     results["SFC_DWPC"] = round(float(sfc_dwpc), 1)
 
     idx850 = np.argmin(np.abs(sounding["PRES"] - 850))
@@ -591,9 +501,6 @@ def calculate_parameters(sounding):
     else:
         results["RRP"] = None
 
-    # ----------------------------------------------------------
-    # Snow Squall Parameters
-    # ----------------------------------------------------------
     results["SFC_TMPC"]    = round(float(sfc_temp), 1)
     results["SFC_WIND_KT"] = round(float(sounding.iloc[0]["SKNT"]), 1)
     results["T700_TMPC"]   = round(float(sounding.iloc[idx700]["TMPC"]), 1)
@@ -665,13 +572,8 @@ def calculate_parameters(sounding):
         results["BS01_KT"] = None
 
     try:
-        bs03 = np.sqrt(
-            (u[idx3] - u[0])**2 +
-            (v[idx3] - v[0])**2
-        )
-        results["BS03_KT"] = round(
-            float(bs03.to("knots").magnitude), 1
-        )
+        bs03 = np.sqrt((u[idx3] - u[0])**2 + (v[idx3] - v[0])**2)
+        results["BS03_KT"] = round(float(bs03.to("knots").magnitude), 1)
     except Exception:
         results["BS03_KT"] = None
 
@@ -714,7 +616,8 @@ def calculate_parameters(sounding):
 sites = ["kbtv", "kpbg", "kmss", "kslk", "rut", "kmpv", "1v4", "kefk"]
 
 # ============================================================
-# PRE-FETCH GRIDDED / STATION DATA  (once for all sites)
+# PRE-FETCH GRIDDED / STATION DATA  (once for all sites — not
+# model-dependent, so no need to repeat per model)
 # ============================================================
 
 print("Fetching Open-Meteo soil moisture …")
@@ -722,126 +625,123 @@ sm_data = fetch_open_meteo_soil_moisture(SITE_COORDS)
 
 print("Fetching RFC Flash Flood Guidance …")
 ffg_data = fetch_ffg(SITE_COORDS)
-print("FFG TYPE:", type(ffg_data))
-print("FFG DATA:", ffg_data)
 
 print("Fetching NCEI rainfall totals …")
 precip_data = fetch_rainfall_totals(SITE_GHCND)
 
 # ============================================================
-# SOUNDING LOOP
+# SOUNDING LOOP  (now over MODELS x sites)
 # ============================================================
 
 all_forecast_results = []
 all_current_results  = []
 
-for site in sites:
-    print(f"Processing {site.upper()}")
+for model in MODELS:
+    print(f"\n=== MODEL: {model.upper()} ===")
 
-    url = f"https://metfs1.agron.iastate.edu/data/bufkit/rap/rap_{site}.buf"
-    response = requests.get(url, timeout=30)
-    response.raise_for_status()
-    lines = response.text.splitlines()
+    for site in sites:
+        print(f"Processing {model.upper()} {site.upper()}")
 
-    rap_run = None
-    for line in lines[:50]:
-        if "TIME =" in line:
-            try:
-                rap_run = line.split("TIME =")[1].strip().split()[0]
-            except Exception:
-                pass
-            break
-
-    stim_locations = [i for i, line in enumerate(lines) if line.startswith("STIM =")]
-    print(f"  Found {len(stim_locations)} forecast hours")
-
-    for hour in range(len(stim_locations) - 1):
-        start = stim_locations[hour]
-        end   = stim_locations[hour + 1]
-        block = lines[start:end]
-
-        valid_time = None
-        for line in block:
-            if "TIME =" in line:
-                valid_time = line.split("TIME =")[1].strip().split()[0]
-                break
-
-        start_idx = None
-        for i, line in enumerate(block):
-            if line.startswith("PRES TMPC"):
-                start_idx = i + 2
-                break
-
-        if start_idx is None:
-            continue
-
-        data = []
-        for i in range(start_idx, len(block) - 1, 2):
-            try:
-                line1 = block[i].split()
-                line2 = block[i + 1].split()
-                if len(line1) != 8 or len(line2) != 2:
-                    break
-                data.append([float(x) for x in line1 + line2])
-            except Exception:
-                break
-
-        if not data:
-            continue
-
-        sounding = pd.DataFrame(
-            data,
-            columns=["PRES", "TMPC", "TMWC", "DWPC", "THTE", "DRCT", "SKNT", "OMEG", "CFRL", "HGHT"],
-        )
+        url = f"https://metfs1.agron.iastate.edu/data/bufkit/{model}/{model}_{site}.buf"
 
         try:
-            params = calculate_parameters(sounding)
-            params["SITE"]       = site.upper()
-            params["FHOUR"]      = hour
-            params["VALID_TIME"] = valid_time
-
-            site_key = site.upper()
-
-            # Open-Meteo soil moisture
-            sm = sm_data.get(site_key, {})
-            params["SM_SURFACE_PCT"] = sm.get("SM_SURFACE_PCT")
-            params["SM_ROOTZONE_PCT"] = sm.get("SM_ROOTZONE_PCT")
-            params["SM_VALID_UTC"]     = sm.get("SM_VALID_UTC")
-
-            # RFC Flash Flood Guidance
-            
-            ffg = ffg_data.get(site_key)
-
-            if ffg is None:
-                print(f"WARNING: No FFG dictionary for {site_key}")
-                ffg = {}
-
-            params["FFG_01HR_IN"] = ffg.get("FFG_01HR_IN")
-            params["FFG_03HR_IN"] = ffg.get("FFG_03HR_IN")
-            params["FFG_06HR_IN"] = ffg.get("FFG_06HR_IN")
-            params["FFG_12HR_IN"] = ffg.get("FFG_12HR_IN")
-
-            # Observed rainfall totals
-            pr = precip_data.get(site_key, {})
-            params["PRECIP_24HR_IN"] = pr.get("PRECIP_24HR_IN")
-            params["PRECIP_72HR_IN"] = pr.get("PRECIP_72HR_IN")
-            params["PRECIP_7DAY_IN"] = pr.get("PRECIP_7DAY_IN")
-
-            if hour == 0:
-                print(site_key)
-                print("SM:", sm)
-                print("FFG:", ffg)
-                print("PR:", pr)
-            
-            all_forecast_results.append(params)
-
-            if hour == 0:
-                current = params.copy()
-                current["RAP_RUN"] = rap_run
-                all_current_results.append(current)
-
+            response = requests.get(url, timeout=30)
+            response.raise_for_status()
         except Exception as e:
-            print(f"  {site.upper()} Hour {hour} failed: {e}")
+            print(f"  WARNING: {model.upper()} {site.upper()} fetch failed: {e}")
+            continue
+
+        lines = response.text.splitlines()
+
+        rap_run = None
+        for line in lines[:50]:
+            if "TIME =" in line:
+                try:
+                    rap_run = line.split("TIME =")[1].strip().split()[0]
+                except Exception:
+                    pass
+                break
+
+        stim_locations = [i for i, line in enumerate(lines) if line.startswith("STIM =")]
+        print(f"  Found {len(stim_locations)} forecast hours")
+
+        n_hours = len(stim_locations) - 1
+        if n_hours > MAX_FORECAST_HOURS:
+            n_hours = MAX_FORECAST_HOURS
+
+        for hour in range(n_hours):
+            start = stim_locations[hour]
+            end   = stim_locations[hour + 1]
+            block = lines[start:end]
+
+            valid_time = None
+            for line in block:
+                if "TIME =" in line:
+                    valid_time = line.split("TIME =")[1].strip().split()[0]
+                    break
+
+            start_idx = None
+            for i, line in enumerate(block):
+                if line.startswith("PRES TMPC"):
+                    start_idx = i + 2
+                    break
+
+            if start_idx is None:
+                continue
+
+            data = []
+            for i in range(start_idx, len(block) - 1, 2):
+                try:
+                    line1 = block[i].split()
+                    line2 = block[i + 1].split()
+                    if len(line1) != 8 or len(line2) != 2:
+                        break
+                    data.append([float(x) for x in line1 + line2])
+                except Exception:
+                    break
+
+            if not data:
+                continue
+
+            sounding = pd.DataFrame(
+                data,
+                columns=["PRES", "TMPC", "TMWC", "DWPC", "THTE", "DRCT", "SKNT", "OMEG", "CFRL", "HGHT"],
+            )
+
+            try:
+                params = calculate_parameters(sounding)
+                params["MODEL"]      = model.upper()
+                params["SITE"]       = site.upper()
+                params["FHOUR"]      = hour
+                params["VALID_TIME"] = valid_time
+
+                site_key = site.upper()
+
+                sm = sm_data.get(site_key, {})
+                params["SM_SURFACE_PCT"]  = sm.get("SM_SURFACE_PCT")
+                params["SM_ROOTZONE_PCT"] = sm.get("SM_ROOTZONE_PCT")
+                params["SM_VALID_UTC"]    = sm.get("SM_VALID_UTC")
+
+                ffg = ffg_data.get(site_key, {})
+                params["FFG_01HR_IN"] = ffg.get("FFG_01HR_IN")
+                params["FFG_03HR_IN"] = ffg.get("FFG_03HR_IN")
+                params["FFG_06HR_IN"] = ffg.get("FFG_06HR_IN")
+                params["FFG_12HR_IN"] = ffg.get("FFG_12HR_IN")
+
+                pr = precip_data.get(site_key, {})
+                params["PRECIP_24HR_IN"] = pr.get("PRECIP_24HR_IN")
+                params["PRECIP_72HR_IN"] = pr.get("PRECIP_72HR_IN")
+                params["PRECIP_7DAY_IN"] = pr.get("PRECIP_7DAY_IN")
+
+                all_forecast_results.append(params)
+
+                if hour == 0:
+                    current = params.copy()
+                    current["RUN"] = rap_run
+                    all_current_results.append(current)
+
+            except Exception as e:
+                print(f"  {model.upper()} {site.upper()} Hour {hour} failed: {e}")
 
 # ============================================================
 # BUILD DATAFRAMES
@@ -850,7 +750,15 @@ for site in sites:
 forecast_df = pd.DataFrame(all_forecast_results)
 forecast_df["DISPLAY_TIME"] = forecast_df["VALID_TIME"].str[-4:].str[:2] + "Z"
 
+# put MODEL/SITE/FHOUR first for readability
+lead_cols = [c for c in ["MODEL", "SITE", "FHOUR", "VALID_TIME", "DISPLAY_TIME"] if c in forecast_df.columns]
+other_cols = [c for c in forecast_df.columns if c not in lead_cols]
+forecast_df = forecast_df[lead_cols + other_cols]
+
 current_df = pd.DataFrame(all_current_results)
+lead_cols_cur = [c for c in ["MODEL", "SITE", "RUN", "VALID_TIME"] if c in current_df.columns]
+other_cols_cur = [c for c in current_df.columns if c not in lead_cols_cur]
+current_df = current_df[lead_cols_cur + other_cols_cur]
 
 forecast_df = forecast_df.replace({np.nan: None})
 current_df = current_df.replace({np.nan: None})
@@ -858,7 +766,7 @@ print(f"\nForecast rows : {len(forecast_df)}")
 print(f"Current rows  : {len(current_df)}")
 
 # ============================================================
-# WRITE TO GOOGLE SHEETS
+# WRITE TO GOOGLE SHEETS  (same two tabs, now MODEL-tagged)
 # ============================================================
 
 spreadsheet = gc.open_by_key("11FjM4i1s0SpOE5y5_nPDRzLEsoAPA62keyS06a0G3Fo")
