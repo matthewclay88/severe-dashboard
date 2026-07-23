@@ -1,3 +1,4 @@
+import re
 import requests
 import pandas as pd
 import numpy as np
@@ -5,6 +6,7 @@ import gspread
 import json
 import os
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from google.oauth2.service_account import Credentials
 from metpy.units import units
@@ -14,6 +16,13 @@ from metpy.calc import (
     mixed_layer_cape_cin,
     most_unstable_cape_cin,
 )
+
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import cartopy.crs as ccrs
+import cartopy.feature as cfeature
+import pygrib
 
 # ============================================================
 # GOOGLE SHEETS AUTH
@@ -349,6 +358,124 @@ def fetch_rainfall_totals(site_ghcnd: dict) -> dict:
 
 
 # ============================================================
+# GLWU WAVE HEIGHT + WIND BARBS (Lake Champlain 500m grid)
+# ============================================================
+# Not site-dependent and not part of the BUFKIT model loop — this is a
+# standalone NOMADS pull + plot, run once per script execution. Wrapped
+# so that a failure here never takes down the Sheets pipeline above.
+# ============================================================
+
+GLWU_BASE_URL = "https://nomads.ncep.noaa.gov/pub/data/nccf/com/glwu/prod"
+GLWU_GRID = "grlr_500m_lc"          # Lake Champlain 500m grid; swap for a
+                                     # Great Lakes grid (e.g. grlc_2p5km_lc)
+                                     # if that's what's actually needed
+GLWU_OUTPUT_DIR = Path("./glwu_output")
+GLWU_DOWNLOAD_DIR = Path("./glwu_downloads")
+GLWU_BARB_SKIP = 8                   # subsample wind vectors for barb density
+
+
+def glwu_find_latest_cycle():
+    """
+    Check today's (and if needed yesterday's) GLWU directory for the
+    newest posted cycle of GLWU_GRID. Cycles don't post at a fixed lag
+    (some land ~1 min after the hour, others 27+ min late), so this
+    scans the actual directory listing rather than assuming a file
+    exists for the current hour.
+    """
+    now = datetime.now(timezone.utc)
+    for day_offset in (0, 1):
+        day = now - timedelta(days=day_offset)
+        date_str = day.strftime("%Y%m%d")
+        dir_url = f"{GLWU_BASE_URL}/glwu.{date_str}/"
+        try:
+            resp = requests.get(dir_url, timeout=30)
+            resp.raise_for_status()
+            html = resp.text
+        except requests.RequestException:
+            continue
+        pattern = rf'glwu\.{re.escape(GLWU_GRID)}\.t(\d{{2}})z\.grib2(?!\.idx)"'
+        hours = sorted(set(re.findall(pattern, html)))
+        if hours:
+            latest_hour = hours[-1]
+            fname = f"glwu.{GLWU_GRID}.t{latest_hour}z.grib2"
+            return date_str, latest_hour, f"{dir_url}{fname}"
+    raise RuntimeError("Could not find a recent GLWU cycle for this grid.")
+
+
+def glwu_download(url, dest: Path):
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    resp = requests.get(url, timeout=120)
+    resp.raise_for_status()
+    dest.write_bytes(resp.content)
+    return dest
+
+
+def glwu_plot_wave_and_wind(grib_path: Path, out_png: Path):
+    grbs = pygrib.open(str(grib_path))
+    swh = grbs.select(shortName="swh", forecastTime=0)[0]
+    u = grbs.select(shortName="u", forecastTime=0)[0]
+    v = grbs.select(shortName="v", forecastTime=0)[0]
+
+    wave, lats, lons = swh.data()
+    uu, _, _ = u.data()
+    vv, _, _ = v.data()
+    lons = np.where(lons > 180, lons - 360, lons)
+    valid = swh.validDate
+    grbs.close()
+
+    fig = plt.figure(figsize=(8, 10))
+    ax = plt.axes(projection=ccrs.PlateCarree())
+    extent = [lons.min() - 0.05, lons.max() + 0.05,
+              lats.min() - 0.05, lats.max() + 0.05]
+    ax.set_extent(extent, crs=ccrs.PlateCarree())
+
+    wave_masked = np.ma.masked_invalid(wave)
+    cf = ax.contourf(lons, lats, wave_masked, levels=20, cmap="turbo",
+                      transform=ccrs.PlateCarree())
+    cb = plt.colorbar(cf, ax=ax, orientation="vertical", pad=0.05, shrink=0.7)
+    cb.set_label("Significant wave height (m)")
+
+    s = GLWU_BARB_SKIP
+    ax.barbs(lons[::s, ::s], lats[::s, ::s], uu[::s, ::s], vv[::s, ::s],
+              length=5, linewidth=0.6, transform=ccrs.PlateCarree())
+
+    ax.add_feature(cfeature.LAND, facecolor="0.85", zorder=2)
+    ax.add_feature(cfeature.COASTLINE, zorder=3)
+    ax.set_title(f"GLWU ({GLWU_GRID}) wave height + wind barbs\n"
+                 f"Valid {valid:%Y-%m-%d %H:%M} UTC")
+
+    out_png.parent.mkdir(parents=True, exist_ok=True)
+    plt.savefig(out_png, dpi=130, bbox_inches="tight")
+    plt.close(fig)
+
+
+def run_glwu_plot():
+    """Pull the latest GLWU cycle and render the wave height + wind
+    barb plot. Any failure here is caught so it can't break the rest
+    of the pipeline (Sheets writes, etc.)."""
+    try:
+        print("\n=== GLWU wave height + wind barbs ===")
+        date_str, hour_str, url = glwu_find_latest_cycle()
+        print(f"  Latest cycle found: {date_str} t{hour_str}z -> {url}")
+
+        grib_dest = GLWU_DOWNLOAD_DIR / f"glwu.{GLWU_GRID}.{date_str}.t{hour_str}z.grib2"
+        if not grib_dest.exists():
+            glwu_download(url, grib_dest)
+            print(f"  Downloaded to {grib_dest}")
+        else:
+            print("  Already have this cycle locally, skipping download.")
+
+        timestamped = GLWU_OUTPUT_DIR / f"glwu_{date_str}_t{hour_str}z.png"
+        latest = GLWU_OUTPUT_DIR / "latest.png"
+        glwu_plot_wave_and_wind(grib_dest, timestamped)
+        glwu_plot_wave_and_wind(grib_dest, latest)
+        print(f"  Saved {timestamped} and {latest}")
+
+    except Exception as e:
+        print(f"  WARNING: GLWU plot step failed: {e}")
+
+
+# ============================================================
 # PARAMETER FUNCTION (unchanged — BUFKIT format is generic
 # across models, so this needs no per-model modification)
 # ============================================================
@@ -614,6 +741,12 @@ def calculate_parameters(sounding):
 # ============================================================
 
 sites = ["kbtv", "kpbg", "kmss", "kslk", "rut", "kmpv", "1v4", "kefk"]
+
+# ============================================================
+# GLWU WAVE + WIND PLOT  (standalone, not site/model-dependent)
+# ============================================================
+
+run_glwu_plot()
 
 # ============================================================
 # PRE-FETCH GRIDDED / STATION DATA  (once for all sites — not
