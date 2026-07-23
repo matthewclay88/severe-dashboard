@@ -9,6 +9,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload
 from metpy.units import units
 import metpy.calc as mpcalc
 from metpy.calc import (
@@ -37,6 +39,7 @@ scopes = [
 
 creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
 gc = gspread.authorize(creds)
+drive_service = build("drive", "v3", credentials=creds)
 
 # ============================================================
 # MODELS + FORECAST-HOUR CAP
@@ -373,6 +376,13 @@ GLWU_OUTPUT_DIR = Path("./glwu_output")
 GLWU_DOWNLOAD_DIR = Path("./glwu_downloads")
 GLWU_BARB_SKIP = 8                   # subsample wind vectors for barb density
 
+# Drive folder the plot gets uploaded to (the runner's disk is wiped after
+# each GitHub Actions run, so this is what actually persists). The folder
+# must be shared with the service account's email (found in
+# creds_dict["client_email"]) with Editor access, or the upload will fail
+# with a 403/404.
+GLWU_DRIVE_FOLDER_ID = os.environ.get("GLWU_DRIVE_FOLDER_ID", "")
+
 
 def glwu_find_latest_cycle():
     """
@@ -449,6 +459,40 @@ def glwu_plot_wave_and_wind(grib_path: Path, out_png: Path):
     plt.close(fig)
 
 
+def glwu_upload_to_drive(local_path: Path, drive_filename: str):
+    """
+    Upsert a file into Drive: if a file with this exact name already
+    exists in GLWU_DRIVE_FOLDER_ID, overwrite its content (same file ID,
+    same shareable link every time). Otherwise create it. Requires the
+    target folder to be shared with the service account's client_email.
+    """
+    if not GLWU_DRIVE_FOLDER_ID:
+        print("  WARNING: GLWU_DRIVE_FOLDER_ID not set; skipping Drive upload.")
+        return
+
+    query = (
+        f"name = '{drive_filename}' "
+        f"and '{GLWU_DRIVE_FOLDER_ID}' in parents "
+        f"and trashed = false"
+    )
+    existing = drive_service.files().list(
+        q=query, spaces="drive", fields="files(id, name)"
+    ).execute().get("files", [])
+
+    media = MediaFileUpload(str(local_path), mimetype="image/png", resumable=False)
+
+    if existing:
+        file_id = existing[0]["id"]
+        drive_service.files().update(fileId=file_id, media_body=media).execute()
+        print(f"  Updated existing Drive file: {drive_filename} (id={file_id})")
+    else:
+        file_metadata = {"name": drive_filename, "parents": [GLWU_DRIVE_FOLDER_ID]}
+        created = drive_service.files().create(
+            body=file_metadata, media_body=media, fields="id"
+        ).execute()
+        print(f"  Created new Drive file: {drive_filename} (id={created.get('id')})")
+
+
 def run_glwu_plot():
     """Pull the latest GLWU cycle and render the wave height + wind
     barb plot. Any failure here is caught so it can't break the rest
@@ -470,6 +514,12 @@ def run_glwu_plot():
         glwu_plot_wave_and_wind(grib_dest, timestamped)
         glwu_plot_wave_and_wind(grib_dest, latest)
         print(f"  Saved {timestamped} and {latest}")
+
+        # The GitHub Actions runner disk disappears after this job ends,
+        # so push the current plot to Drive to make it actually persist.
+        # Only "latest.png" is uploaded (overwritten each run) so Drive
+        # doesn't accumulate one file per run, every 15 minutes, forever.
+        glwu_upload_to_drive(latest, "glwu_latest.png")
 
     except Exception as e:
         print(f"  WARNING: GLWU plot step failed: {e}")
