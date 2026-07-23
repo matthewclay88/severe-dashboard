@@ -380,6 +380,11 @@ GLWU_BARB_SKIP = 8                   # subsample wind vectors for barb density
 GLWU_N_HOURS = 6                     # analysis hour + 5 forecast hours
 GLWU_FRAME_DURATION_MS = 900          # time each frame is shown in the GIF
 
+# GRIB2 stores these in meters and m/s (WMO convention); convert for display
+# since staff work in feet/knots, not metric.
+GLWU_M_TO_FT = 3.28084
+GLWU_MS_TO_KT = 1.94384
+
 # Drive folder the plot gets uploaded to (the runner's disk is wiped after
 # each GitHub Actions run, so this is what actually persists). The folder
 # must be shared with the service account's email (found in
@@ -424,15 +429,20 @@ def glwu_download(url, dest: Path):
     return dest
 
 
-def glwu_render_frame(swh, u, v, forecast_hour, vmax):
+def glwu_render_frame(swh, u, v, forecast_hour, vmax_ft):
     """Render one frame (one forecast hour) as a PIL Image, using a
-    shared vmax across all frames so the color scale doesn't jump
-    around between frames of the same animation."""
+    shared vmax_ft across all frames so the color scale doesn't jump
+    around between frames of the same animation. Converts GRIB2's
+    native meters/m-s to feet/knots for display."""
     wave, lats, lons = swh.data()
     uu, _, _ = u.data()
     vv, _, _ = v.data()
     lons = np.where(lons > 180, lons - 360, lons)
     valid = swh.validDate
+
+    wave_ft = wave * GLWU_M_TO_FT
+    uu_kt = uu * GLWU_MS_TO_KT
+    vv_kt = vv * GLWU_MS_TO_KT
 
     fig = plt.figure(figsize=(8, 10))
     ax = plt.axes(projection=ccrs.PlateCarree())
@@ -446,19 +456,19 @@ def glwu_render_frame(swh, u, v, forecast_hour, vmax):
     ax.add_feature(cfeature.LAND, facecolor="0.85", zorder=0)
     ax.add_feature(cfeature.COASTLINE, zorder=3, linewidth=0.5)
 
-    wave_masked = np.ma.masked_invalid(wave)
-    levels = np.linspace(0, vmax, 21)
+    wave_masked = np.ma.masked_invalid(wave_ft)
+    levels = np.linspace(0, vmax_ft, 21)
     cf = ax.contourf(lons, lats, wave_masked, levels=levels, cmap="turbo",
                       transform=ccrs.PlateCarree(), zorder=2)
     cb = plt.colorbar(cf, ax=ax, orientation="vertical", pad=0.05, shrink=0.7)
-    cb.set_label("Significant wave height (m)")
+    cb.set_label("Significant wave height (ft)")
 
     s = GLWU_BARB_SKIP
-    ax.barbs(lons[::s, ::s], lats[::s, ::s], uu[::s, ::s], vv[::s, ::s],
+    ax.barbs(lons[::s, ::s], lats[::s, ::s], uu_kt[::s, ::s], vv_kt[::s, ::s],
               length=5, linewidth=0.6, transform=ccrs.PlateCarree(), zorder=3)
 
     label = "Analysis (current)" if forecast_hour == 0 else f"+{forecast_hour}h forecast"
-    ax.set_title(f"GLWU ({GLWU_GRID}) wave height + wind barbs\n"
+    ax.set_title(f"GLWU ({GLWU_GRID}) wave height (ft) + wind barbs (kt)\n"
                  f"{label} — Valid {valid:%Y-%m-%d %H:%M} UTC")
 
     buf = io.BytesIO()
@@ -478,21 +488,21 @@ def glwu_build_animation(grib_path: Path, out_gif: Path, n_hours: int = GLWU_N_H
     grbs = pygrib.open(str(grib_path))
 
     # First pass: gather the messages for each hour and find the max
-    # wave height across all of them, so every frame shares one color
-    # scale (an animation that rescales its colorbar frame to frame
-    # is misleading and looks like a flicker/glitch).
+    # wave height (in feet) across all of them, so every frame shares
+    # one color scale (an animation that rescales its colorbar frame
+    # to frame is misleading and looks like a flicker/glitch).
     frame_msgs = []
-    vmax = 0.0
+    vmax_ft = 0.0
     for h in range(n_hours):
         swh = grbs.select(shortName="swh", forecastTime=h)[0]
         u = grbs.select(shortName="u", forecastTime=h)[0]
         v = grbs.select(shortName="v", forecastTime=h)[0]
         wave, _, _ = swh.data()
-        vmax = max(vmax, float(np.nanmax(wave)))
+        vmax_ft = max(vmax_ft, float(np.nanmax(wave)) * GLWU_M_TO_FT)
         frame_msgs.append((h, swh, u, v))
 
     pil_frames = [
-        glwu_render_frame(swh, u, v, h, vmax) for h, swh, u, v in frame_msgs
+        glwu_render_frame(swh, u, v, h, vmax_ft) for h, swh, u, v in frame_msgs
     ]
     grbs.close()
 
