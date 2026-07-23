@@ -439,18 +439,22 @@ def glwu_plot_wave_and_wind(grib_path: Path, out_png: Path):
               lats.min() - 0.05, lats.max() + 0.05]
     ax.set_extent(extent, crs=ccrs.PlateCarree())
 
+    # Land goes down FIRST as background. Drawing it after the contour
+    # (with a higher zorder) paints solid gray over the whole domain,
+    # including the water - which is what was hiding the wave data.
+    ax.add_feature(cfeature.LAND, facecolor="0.85", zorder=0)
+    ax.add_feature(cfeature.COASTLINE, zorder=3, linewidth=0.5)
+
     wave_masked = np.ma.masked_invalid(wave)
     cf = ax.contourf(lons, lats, wave_masked, levels=20, cmap="turbo",
-                      transform=ccrs.PlateCarree())
+                      transform=ccrs.PlateCarree(), zorder=2)
     cb = plt.colorbar(cf, ax=ax, orientation="vertical", pad=0.05, shrink=0.7)
     cb.set_label("Significant wave height (m)")
 
     s = GLWU_BARB_SKIP
     ax.barbs(lons[::s, ::s], lats[::s, ::s], uu[::s, ::s], vv[::s, ::s],
-              length=5, linewidth=0.6, transform=ccrs.PlateCarree())
+              length=5, linewidth=0.6, transform=ccrs.PlateCarree(), zorder=3)
 
-    ax.add_feature(cfeature.LAND, facecolor="0.85", zorder=2)
-    ax.add_feature(cfeature.COASTLINE, zorder=3)
     ax.set_title(f"GLWU ({GLWU_GRID}) wave height + wind barbs\n"
                  f"Valid {valid:%Y-%m-%d %H:%M} UTC")
 
