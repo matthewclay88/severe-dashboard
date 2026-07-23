@@ -1,4 +1,5 @@
 import re
+import io
 import requests
 import pandas as pd
 import numpy as np
@@ -25,6 +26,7 @@ import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 import pygrib
+from PIL import Image
 
 # ============================================================
 # GOOGLE SHEETS AUTH
@@ -375,6 +377,8 @@ GLWU_GRID = "grlr_500m_lc"          # Lake Champlain 500m grid; swap for a
 GLWU_OUTPUT_DIR = Path("./glwu_output")
 GLWU_DOWNLOAD_DIR = Path("./glwu_downloads")
 GLWU_BARB_SKIP = 8                   # subsample wind vectors for barb density
+GLWU_N_HOURS = 6                     # analysis hour + 5 forecast hours
+GLWU_FRAME_DURATION_MS = 900          # time each frame is shown in the GIF
 
 # Drive folder the plot gets uploaded to (the runner's disk is wiped after
 # each GitHub Actions run, so this is what actually persists). The folder
@@ -420,18 +424,15 @@ def glwu_download(url, dest: Path):
     return dest
 
 
-def glwu_plot_wave_and_wind(grib_path: Path, out_png: Path):
-    grbs = pygrib.open(str(grib_path))
-    swh = grbs.select(shortName="swh", forecastTime=0)[0]
-    u = grbs.select(shortName="u", forecastTime=0)[0]
-    v = grbs.select(shortName="v", forecastTime=0)[0]
-
+def glwu_render_frame(swh, u, v, forecast_hour, vmax):
+    """Render one frame (one forecast hour) as a PIL Image, using a
+    shared vmax across all frames so the color scale doesn't jump
+    around between frames of the same animation."""
     wave, lats, lons = swh.data()
     uu, _, _ = u.data()
     vv, _, _ = v.data()
     lons = np.where(lons > 180, lons - 360, lons)
     valid = swh.validDate
-    grbs.close()
 
     fig = plt.figure(figsize=(8, 10))
     ax = plt.axes(projection=ccrs.PlateCarree())
@@ -446,7 +447,8 @@ def glwu_plot_wave_and_wind(grib_path: Path, out_png: Path):
     ax.add_feature(cfeature.COASTLINE, zorder=3, linewidth=0.5)
 
     wave_masked = np.ma.masked_invalid(wave)
-    cf = ax.contourf(lons, lats, wave_masked, levels=20, cmap="turbo",
+    levels = np.linspace(0, vmax, 21)
+    cf = ax.contourf(lons, lats, wave_masked, levels=levels, cmap="turbo",
                       transform=ccrs.PlateCarree(), zorder=2)
     cb = plt.colorbar(cf, ax=ax, orientation="vertical", pad=0.05, shrink=0.7)
     cb.set_label("Significant wave height (m)")
@@ -455,20 +457,65 @@ def glwu_plot_wave_and_wind(grib_path: Path, out_png: Path):
     ax.barbs(lons[::s, ::s], lats[::s, ::s], uu[::s, ::s], vv[::s, ::s],
               length=5, linewidth=0.6, transform=ccrs.PlateCarree(), zorder=3)
 
+    label = "Analysis (current)" if forecast_hour == 0 else f"+{forecast_hour}h forecast"
     ax.set_title(f"GLWU ({GLWU_GRID}) wave height + wind barbs\n"
-                 f"Valid {valid:%Y-%m-%d %H:%M} UTC")
+                 f"{label} — Valid {valid:%Y-%m-%d %H:%M} UTC")
 
-    out_png.parent.mkdir(parents=True, exist_ok=True)
-    plt.savefig(out_png, dpi=130, bbox_inches="tight")
+    buf = io.BytesIO()
+    plt.savefig(buf, format="png", dpi=110, bbox_inches="tight")
     plt.close(fig)
+    buf.seek(0)
+    return Image.open(buf).convert("RGB")
 
 
-def glwu_upload_to_drive(local_path: Path, drive_filename: str):
+def glwu_build_animation(grib_path: Path, out_gif: Path, n_hours: int = GLWU_N_HOURS):
+    """
+    Build an animated GIF covering the analysis hour plus the next
+    (n_hours - 1) forecast hours, all from the single already-downloaded
+    GRIB2 (the file already contains a forecast sequence out to 48h, so
+    no extra download is needed to get future hours).
+    """
+    grbs = pygrib.open(str(grib_path))
+
+    # First pass: gather the messages for each hour and find the max
+    # wave height across all of them, so every frame shares one color
+    # scale (an animation that rescales its colorbar frame to frame
+    # is misleading and looks like a flicker/glitch).
+    frame_msgs = []
+    vmax = 0.0
+    for h in range(n_hours):
+        swh = grbs.select(shortName="swh", forecastTime=h)[0]
+        u = grbs.select(shortName="u", forecastTime=h)[0]
+        v = grbs.select(shortName="v", forecastTime=h)[0]
+        wave, _, _ = swh.data()
+        vmax = max(vmax, float(np.nanmax(wave)))
+        frame_msgs.append((h, swh, u, v))
+
+    pil_frames = [
+        glwu_render_frame(swh, u, v, h, vmax) for h, swh, u, v in frame_msgs
+    ]
+    grbs.close()
+
+    out_gif.parent.mkdir(parents=True, exist_ok=True)
+    pil_frames[0].save(
+        out_gif,
+        save_all=True,
+        append_images=pil_frames[1:],
+        duration=GLWU_FRAME_DURATION_MS,
+        loop=0,  # loop forever
+    )
+
+
+def glwu_upload_to_drive(local_path: Path, drive_filename: str, mimetype: str):
     """
     Upsert a file into Drive: if a file with this exact name already
     exists in GLWU_DRIVE_FOLDER_ID, overwrite its content (same file ID,
     same shareable link every time). Otherwise create it. Requires the
-    target folder to be shared with the service account's client_email.
+    target folder to be shared with the service account's client_email,
+    AND (since service accounts have no storage quota of their own) a
+    file with this exact name must already exist there, pre-uploaded by
+    a real Google account - otherwise the "create" branch below will
+    fail with a storageQuotaExceeded error.
     """
     if not GLWU_DRIVE_FOLDER_ID:
         print("  WARNING: GLWU_DRIVE_FOLDER_ID not set; skipping Drive upload.")
@@ -483,7 +530,7 @@ def glwu_upload_to_drive(local_path: Path, drive_filename: str):
         q=query, spaces="drive", fields="files(id, name)"
     ).execute().get("files", [])
 
-    media = MediaFileUpload(str(local_path), mimetype="image/png", resumable=False)
+    media = MediaFileUpload(str(local_path), mimetype=mimetype, resumable=False)
 
     if existing:
         file_id = existing[0]["id"]
@@ -498,11 +545,12 @@ def glwu_upload_to_drive(local_path: Path, drive_filename: str):
 
 
 def run_glwu_plot():
-    """Pull the latest GLWU cycle and render the wave height + wind
-    barb plot. Any failure here is caught so it can't break the rest
-    of the pipeline (Sheets writes, etc.)."""
+    """Pull the latest GLWU cycle and render an animated GIF looping
+    through the analysis hour plus the next GLWU_N_HOURS-1 forecast
+    hours. Any failure here is caught so it can't break the rest of
+    the pipeline (Sheets writes, etc.)."""
     try:
-        print("\n=== GLWU wave height + wind barbs ===")
+        print("\n=== GLWU wave height + wind barbs (animated loop) ===")
         date_str, hour_str, url = glwu_find_latest_cycle()
         print(f"  Latest cycle found: {date_str} t{hour_str}z -> {url}")
 
@@ -513,17 +561,19 @@ def run_glwu_plot():
         else:
             print("  Already have this cycle locally, skipping download.")
 
-        timestamped = GLWU_OUTPUT_DIR / f"glwu_{date_str}_t{hour_str}z.png"
-        latest = GLWU_OUTPUT_DIR / "latest.png"
-        glwu_plot_wave_and_wind(grib_dest, timestamped)
-        glwu_plot_wave_and_wind(grib_dest, latest)
-        print(f"  Saved {timestamped} and {latest}")
+        timestamped_gif = GLWU_OUTPUT_DIR / f"glwu_{date_str}_t{hour_str}z.gif"
+        latest_gif = GLWU_OUTPUT_DIR / "latest.gif"
+        glwu_build_animation(grib_dest, timestamped_gif)
+        glwu_build_animation(grib_dest, latest_gif)
+        print(f"  Saved {timestamped_gif} and {latest_gif} "
+              f"({GLWU_N_HOURS} frames: analysis + {GLWU_N_HOURS - 1}h forecast)")
 
         # The GitHub Actions runner disk disappears after this job ends,
-        # so push the current plot to Drive to make it actually persist.
-        # Only "latest.png" is uploaded (overwritten each run) so Drive
-        # doesn't accumulate one file per run, every 15 minutes, forever.
-        glwu_upload_to_drive(latest, "glwu_latest.png")
+        # so push the current animation to Drive to make it actually
+        # persist. Only "latest.gif" is uploaded (overwritten each run)
+        # so Drive doesn't accumulate one file per run, every 15
+        # minutes, forever.
+        glwu_upload_to_drive(latest_gif, "glwu_latest.gif", mimetype="image/gif")
 
     except Exception as e:
         print(f"  WARNING: GLWU plot step failed: {e}")
