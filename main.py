@@ -667,7 +667,7 @@ def glwu_render_station_forecast_panel(
     # We use one compact row across the top rather than repeating
     # full timestamps underneath every individual chart.
 
-    header_ax = fig.add_axes([0.085, 0.875, 0.90, 0.025])
+    header_ax = fig.add_axes([0.085, 0.882, 0.90, 0.025])
     header_ax.set_facecolor("none")
     header_ax.patch.set_alpha(0)
 
@@ -682,7 +682,7 @@ def glwu_render_station_forecast_panel(
     header_ax.tick_params(
         axis="x",
         length=0,
-        pad=4,
+        pad=0,
         labelsize=9,
         colors=TEXT,
     )
