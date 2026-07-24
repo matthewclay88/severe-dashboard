@@ -614,20 +614,19 @@ def glwu_render_station_forecast_panel(
     # ============================================================
 
     fig = plt.figure(
-        figsize=(15.5, 9.5),
-        facecolor="#f7f9fc",
+    figsize=(11.5, 13.5),
+    facecolor="#f7f9fc",
     )
 
-    # Leave space at top for title/time header and at bottom for footer.
     gs = fig.add_gridspec(
         nrows=4,
         ncols=2,
-        left=0.075,
+        left=0.085,
         right=0.985,
-        bottom=0.095,
-        top=0.80,
-        hspace=0.16,
-        wspace=0.09,
+        bottom=0.075,
+        top=0.82,
+        hspace=0.12,
+        wspace=0.08,
     )
 
     axes = []
@@ -657,7 +656,7 @@ def glwu_render_station_forecast_panel(
         ),
         ha="center",
         va="center",
-        fontsize=10.5,
+        fontsize=11.5,
         color=TEXT,
     )
 
@@ -668,7 +667,7 @@ def glwu_render_station_forecast_panel(
     # We use one compact row across the top rather than repeating
     # full timestamps underneath every individual chart.
 
-    header_ax = fig.add_axes([0.075, 0.825, 0.91, 0.055])
+    header_ax = fig.add_axes([0.085, 0.835, 0.90, 0.045])
 
     header_ax.set_xlim(xnums[0], xnums[-1])
     header_ax.set_ylim(0, 1)
@@ -864,7 +863,7 @@ def glwu_render_station_forecast_panel(
             transform=ax.transAxes,
             ha="left",
             va="center",
-            fontsize=10.5,
+            fontsize=11.5,
             fontweight="bold",
             color=NAVY,
             zorder=10,
@@ -881,7 +880,7 @@ def glwu_render_station_forecast_panel(
             transform=ax.transAxes,
             ha="right",
             va="center",
-            fontsize=7.5,
+            fontsize=8.5,
             color=MUTED,
             zorder=10,
         )
@@ -895,7 +894,7 @@ def glwu_render_station_forecast_panel(
                 transform=ax.transAxes,
                 ha="right",
                 va="center",
-                fontsize=15,
+                fontsize=17,
                 fontweight="bold",
                 color=NAVY,
                 zorder=10,
@@ -908,7 +907,7 @@ def glwu_render_station_forecast_panel(
                 transform=ax.transAxes,
                 ha="right",
                 va="center",
-                fontsize=7.5,
+                fontsize=8.5,
                 color=TEXT,
                 zorder=10,
             )
@@ -922,7 +921,7 @@ def glwu_render_station_forecast_panel(
                 transform=ax.transAxes,
                 ha="right",
                 va="center",
-                fontsize=15,
+                fontsize=17,
                 fontweight="bold",
                 color=MUTED,
                 zorder=10,
@@ -996,7 +995,7 @@ def glwu_render_station_forecast_panel(
 
         ax.tick_params(
             axis="y",
-            labelsize=7.5,
+            labelsize=8.5,
             colors=TEXT,
             length=0,
             pad=5,
@@ -1076,7 +1075,7 @@ def glwu_render_station_forecast_panel(
 
         fig.text(
             figure_xy[0],
-            0.888,
+            0.895,
             day_start.strftime("%a %b %d").upper(),
             ha="center",
             va="center",
@@ -1143,9 +1142,8 @@ def glwu_render_station_forecast_panel(
     plt.savefig(
         buf,
         format="png",
-        dpi=130,
+        dpi=140,
         facecolor=fig.get_facecolor(),
-        bbox_inches="tight",
     )
 
     plt.close(fig)
