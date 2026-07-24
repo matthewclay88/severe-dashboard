@@ -24,6 +24,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
+import matplotlib.path as mpath
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
@@ -410,7 +411,30 @@ GLWU_WAVE_HEIGHT_MAX_FT = 5.0
 # BTV airport marker — reuses the same coordinates already defined in
 # SITE_COORDS above rather than duplicating them.
 BTV_LAT, BTV_LON = SITE_COORDS["kbtv"]
-NWS_LOGO_URL = "https://www.weather.gov/favicon.ico"  # official NWS seal
+PBG_LAT, PBG_LON = SITE_COORDS["kpbg"]
+
+# NWS-specific seal, NOT the NOAA "meatball". weather.gov's own favicon.ico
+# turned out to actually be the NOAA logo, not NWS — the two are distinct,
+# separately-trademarked marks ("Both the NOAA emblem and NWS logo are
+# registered trademarks", per weather.gov/logorequest-faq). The correct NWS
+# seal is the second of two badges in weather.gov's own page-header banner
+# image; NWS_LOGO_CROP_BOX below is the pixel-precise crop for it (found by
+# scanning the banner for non-white column runs — see conversation notes).
+NWS_LOGO_URL = "https://www.weather.gov/bundles/templating/images/header/header.png"
+NWS_LOGO_CROP_BOX = (56, 0, 104, 60)  # (left, top, right, bottom) in source pixels
+
+# Simple top-down airplane silhouette for the KPBG marker — a hand-built
+# vector path rather than a Unicode symbol (e.g. "✈") or an image fetch.
+# This is deliberate: the script runs unattended on a GitHub Actions
+# runner, which may not have the same font/glyph coverage as wherever this
+# was written and tested — a vector path renders identically everywhere,
+# with no font dependency at all.
+AIRPLANE_PATH = mpath.Path([
+    (0, 1.0), (0.08, 0.55), (0.5, 0.15), (0.5, 0.02), (0.1, 0.12),
+    (0.1, -0.35), (0.28, -0.55), (0.28, -0.65), (0, -0.5),
+    (-0.28, -0.65), (-0.28, -0.55), (-0.1, -0.35), (-0.1, 0.12),
+    (-0.5, 0.02), (-0.5, 0.15), (-0.08, 0.55), (0, 1.0),
+])
 
 # Drive folder the plot gets uploaded to (the runner's disk is wiped after
 # each GitHub Actions run, so this is what actually persists). The folder
@@ -460,10 +484,11 @@ _nws_icon_cache = None
 
 
 def get_nws_icon():
-    """Fetch the official NWS seal (from weather.gov's own favicon) once per
-    script run and cache it in memory — this is a tiny 48x48 image, but no
-    reason to re-fetch it for every animation frame. Returns None (marker
-    silently falls back to skip the icon) if the fetch ever fails, so a
+    """Fetch the official NWS seal — cropped from weather.gov's own page
+    header banner, NOT the favicon (that turned out to be the NOAA
+    "meatball" logo instead, a distinct mark from the NWS-specific one) —
+    once per script run and cache it in memory. Returns None (markers
+    silently fall back to a plain dot) if the fetch ever fails, so a
     network hiccup here can't take down the whole plot."""
     global _nws_icon_cache
     if _nws_icon_cache is not None:
@@ -471,10 +496,9 @@ def get_nws_icon():
     try:
         resp = requests.get(NWS_LOGO_URL, timeout=15)
         resp.raise_for_status()
-        ico = Image.open(io.BytesIO(resp.content))
-        # .ico files bundle multiple sizes; Pillow opens the first/largest by
-        # default, which for weather.gov's favicon is the 48x48 version.
-        _nws_icon_cache = np.array(ico.convert("RGBA"))
+        banner = Image.open(io.BytesIO(resp.content))
+        badge = banner.crop(NWS_LOGO_CROP_BOX)
+        _nws_icon_cache = np.array(badge.convert("RGBA"))
         return _nws_icon_cache
     except Exception as e:
         print(f"  WARNING: could not fetch NWS icon for BTV marker: {e}")
@@ -521,7 +545,15 @@ def glwu_render_frame(swh, u, v, forecast_hour):
     ax.add_feature(cfeature.LAND, facecolor="0.85", zorder=0)
     ax.add_feature(cfeature.LAKES, facecolor="none", edgecolor="black",
                     linewidth=0.3, zorder=1)
-    ax.add_feature(cfeature.STATES, edgecolor="black", linewidth=0.5, zorder=4)
+    # Cartopy's cfeature module has no built-in COUNTIES constant (unlike
+    # STATES/BORDERS) — Natural Earth does have this layer, just accessed
+    # via NaturalEarthFeature directly instead. Dotted + thin + gray so it
+    # reads as reference detail without competing with the state/border
+    # lines above it.
+    counties = cfeature.NaturalEarthFeature("cultural", "admin_2_counties", "10m",
+                                              facecolor="none", edgecolor="gray")
+    ax.add_feature(counties, linewidth=0.4, linestyle=":", zorder=2)
+    ax.add_feature(cfeature.STATES, edgecolor="black", linewidth=0.6, zorder=4)
     ax.add_feature(cfeature.BORDERS, edgecolor="black", linewidth=0.9, zorder=4)
     ax.add_feature(cfeature.COASTLINE, zorder=4, linewidth=0.5)
 
@@ -531,7 +563,7 @@ def glwu_render_frame(swh, u, v, forecast_hour):
     # at the top color instead of showing as blank/uncolored.
     levels = np.linspace(0, GLWU_WAVE_HEIGHT_MAX_FT, 21)
     cf = ax.contourf(lons, lats, wave_masked, levels=levels, cmap="turbo",
-                      extend="max", transform=ccrs.PlateCarree(), zorder=2)
+                      extend="max", transform=ccrs.PlateCarree(), zorder=3)
     cb = plt.colorbar(cf, ax=ax, orientation="vertical", pad=0.05, shrink=0.7)
     cb.set_label(f"Significant wave height (ft, fixed 0-{GLWU_WAVE_HEIGHT_MAX_FT:.0f}ft scale)")
 
@@ -540,20 +572,51 @@ def glwu_render_frame(swh, u, v, forecast_hour):
               length=5, linewidth=0.7, color="white",
               transform=ccrs.PlateCarree(), zorder=5)
 
+    # Lat/lon reference gridlines — standard on operational met charts, and
+    # useful for reading off a rough position without needing a ruler.
+    gl = ax.gridlines(draw_labels=True, linewidth=0.3, color="gray", alpha=0.5,
+                       linestyle="--", zorder=1)
+    gl.top_labels = False
+    gl.right_labels = False
+    gl.xlabel_style = {"size": 7}
+    gl.ylabel_style = {"size": 7}
+
     # BTV marker: NWS seal icon if the fetch succeeds, otherwise a plain
     # dot so the marker+label still show up rather than silently vanishing.
     icon = get_nws_icon()
     if icon is not None:
-        imagebox = OffsetImage(icon, zoom=0.5)
+        imagebox = OffsetImage(icon, zoom=0.35)
         ab = AnnotationBbox(imagebox, (BTV_LON, BTV_LAT), frameon=False,
                              box_alignment=(0.5, 0.5), zorder=6)
         ax.add_artist(ab)
     else:
         ax.plot(BTV_LON, BTV_LAT, marker="o", color="black", markersize=5,
                  transform=ccrs.PlateCarree(), zorder=6)
-    ax.text(BTV_LON + 0.02, BTV_LAT, "BTV", fontsize=9, fontweight="bold",
+    ax.text(BTV_LON + 0.025, BTV_LAT, "BTV", fontsize=9, fontweight="bold",
             color="black", transform=ccrs.PlateCarree(), zorder=6,
             va="center", ha="left")
+
+    # KPBG marker: vector airplane silhouette (see AIRPLANE_PATH above for
+    # why this isn't a Unicode symbol or fetched image).
+    ax.plot(PBG_LON, PBG_LAT, marker=AIRPLANE_PATH, markersize=16, color="black",
+            transform=ccrs.PlateCarree(), zorder=6)
+    ax.text(PBG_LON + 0.025, PBG_LAT, "PBG", fontsize=9, fontweight="bold",
+            color="black", transform=ccrs.PlateCarree(), zorder=6,
+            va="center", ha="left")
+
+    # Other BUFKIT sites, as small reference dots — only the ones that fall
+    # within this particular clipped view. Broader geographic context
+    # without the visual weight of a full marker for every one of them.
+    for site_id, (site_lat, site_lon) in SITE_COORDS.items():
+        if site_id in ("kbtv", "kpbg"):
+            continue
+        if not (extent[0] <= site_lon <= extent[1] and extent[2] <= site_lat <= extent[3]):
+            continue
+        ax.plot(site_lon, site_lat, marker="o", color="black", markersize=3,
+                transform=ccrs.PlateCarree(), zorder=6)
+        ax.text(site_lon + 0.02, site_lat, site_id.upper().lstrip("K"), fontsize=6.5,
+                color="black", transform=ccrs.PlateCarree(), zorder=6,
+                va="center", ha="left")
 
     label = "Analysis (current)" if forecast_hour == 0 else f"+{forecast_hour}h forecast"
     ax.set_title(f"GLWU ({GLWU_GRID}) wave height (ft) + wind barbs (kt)\n"
