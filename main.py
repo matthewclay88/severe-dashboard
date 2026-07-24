@@ -23,9 +23,6 @@ from metpy.calc import (
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-import matplotlib.image as mpimg
-import matplotlib.path as mpath
-from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 import cartopy
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
@@ -380,9 +377,7 @@ GLWU_GRID = "grlr_500m_lc"          # Lake Champlain 500m grid; swap for a
                                      # if that's what's actually needed
 GLWU_OUTPUT_DIR = Path("./glwu_output")
 GLWU_DOWNLOAD_DIR = Path("./glwu_downloads")
-GLWU_BARB_SKIP = 18                  # subsample wind vectors for barb density
-                                     # (was 8 -> this cuts barb count ~78%,
-                                     # tune up/down to taste)
+GLWU_BARB_SKIP = 8                   # subsample wind vectors for barb density
 GLWU_N_HOURS = 6                     # analysis hour + 5 forecast hours
 GLWU_FRAME_DURATION_MS = 900          # time each frame is shown in the GIF
 
@@ -390,52 +385,6 @@ GLWU_FRAME_DURATION_MS = 900          # time each frame is shown in the GIF
 # since staff work in feet/knots, not metric.
 GLWU_M_TO_FT = 3.28084
 GLWU_MS_TO_KT = 1.94384
-
-# Tighter map framing: the raw grid spans the full ~2.0 degrees of latitude
-# from South Bay up into Missisquoi Bay/Quebec, which is far more than the
-# main operational lake body needs and leaves the narrow (~0.45 deg wide)
-# lake looking tiny in a tall, mostly-empty figure. Trimming north/south
-# zooms in on the main body; the figure width is also now computed FROM
-# the resulting aspect ratio (see glwu_render_frame) instead of a fixed 8in,
-# which is what actually eliminates the big empty margins left/right —
-# clipping alone helps but can't fully fix that on its own.
-GLWU_LAT_CLIP_SOUTH_DEG = 0.15
-GLWU_LAT_CLIP_NORTH_DEG = 0.35
-
-# Fixed color scale instead of a per-run dynamic max — a dynamic scale means
-# the same color could represent 0.5ft on a calm day and 3ft on a rough one,
-# which is misleading at a glance from across the ops floor. Values above
-# this just saturate at the top color (see extend="max" in contourf) rather
-# than being hidden/blank.
-GLWU_WAVE_HEIGHT_MAX_FT = 5.0
-
-# BTV airport marker — reuses the same coordinates already defined in
-# SITE_COORDS above rather than duplicating them.
-BTV_LAT, BTV_LON = SITE_COORDS["kbtv"]
-PBG_LAT, PBG_LON = SITE_COORDS["kpbg"]
-
-# NWS-specific seal, NOT the NOAA "meatball". weather.gov's own favicon.ico
-# turned out to actually be the NOAA logo, not NWS — the two are distinct,
-# separately-trademarked marks ("Both the NOAA emblem and NWS logo are
-# registered trademarks", per weather.gov/logorequest-faq). The correct NWS
-# seal is the second of two badges in weather.gov's own page-header banner
-# image; NWS_LOGO_CROP_BOX below is the pixel-precise crop for it (found by
-# scanning the banner for non-white column runs — see conversation notes).
-NWS_LOGO_URL = "https://www.weather.gov/bundles/templating/images/header/header.png"
-NWS_LOGO_CROP_BOX = (56, 0, 104, 60)  # (left, top, right, bottom) in source pixels
-
-# Simple top-down airplane silhouette for the KPBG marker — a hand-built
-# vector path rather than a Unicode symbol (e.g. "✈") or an image fetch.
-# This is deliberate: the script runs unattended on a GitHub Actions
-# runner, which may not have the same font/glyph coverage as wherever this
-# was written and tested — a vector path renders identically everywhere,
-# with no font dependency at all.
-AIRPLANE_PATH = mpath.Path([
-    (0, 1.0), (0.08, 0.55), (0.5, 0.15), (0.5, 0.02), (0.1, 0.12),
-    (0.1, -0.35), (0.28, -0.55), (0.28, -0.65), (0, -0.5),
-    (-0.28, -0.65), (-0.28, -0.55), (-0.1, -0.35), (-0.1, 0.12),
-    (-0.5, 0.02), (-0.5, 0.15), (-0.08, 0.55), (0, 1.0),
-])
 
 # Drive folder the plot gets uploaded to (the runner's disk is wiped after
 # each GitHub Actions run, so this is what actually persists). The folder
@@ -481,36 +430,11 @@ def glwu_download(url, dest: Path):
     return dest
 
 
-_nws_icon_cache = None
-
-
-def get_nws_icon():
-    """Fetch the official NWS seal — cropped from weather.gov's own page
-    header banner, NOT the favicon (that turned out to be the NOAA
-    "meatball" logo instead, a distinct mark from the NWS-specific one) —
-    once per script run and cache it in memory. Returns None (markers
-    silently fall back to a plain dot) if the fetch ever fails, so a
-    network hiccup here can't take down the whole plot."""
-    global _nws_icon_cache
-    if _nws_icon_cache is not None:
-        return _nws_icon_cache
-    try:
-        resp = requests.get(NWS_LOGO_URL, timeout=15)
-        resp.raise_for_status()
-        banner = Image.open(io.BytesIO(resp.content))
-        badge = banner.crop(NWS_LOGO_CROP_BOX)
-        _nws_icon_cache = np.array(badge.convert("RGBA"))
-        return _nws_icon_cache
-    except Exception as e:
-        print(f"  WARNING: could not fetch NWS icon for BTV marker: {e}")
-        return None
-
-
-def glwu_render_frame(swh, u, v, forecast_hour):
-    """Render one frame (one forecast hour) as a PIL Image. Converts GRIB2's
-    native meters/m-s to feet/knots for display. Uses a fixed color scale
-    (GLWU_WAVE_HEIGHT_MAX_FT) rather than a per-run dynamic max, so frames
-    are also directly comparable day to day, not just within one animation."""
+def glwu_render_frame(swh, u, v, forecast_hour, vmax_ft):
+    """Render one frame (one forecast hour) as a PIL Image, using a
+    shared vmax_ft across all frames so the color scale doesn't jump
+    around between frames of the same animation. Converts GRIB2's
+    native meters/m-s to feet/knots for display."""
     wave, lats, lons = swh.data()
     uu, _, _ = u.data()
     vv, _, _ = v.data()
@@ -521,103 +445,28 @@ def glwu_render_frame(swh, u, v, forecast_hour):
     uu_kt = uu * GLWU_MS_TO_KT
     vv_kt = vv * GLWU_MS_TO_KT
 
-    # Clip north/south to zoom in on the main lake body (see
-    # GLWU_LAT_CLIP_* above), then size the figure to actually match the
-    # resulting aspect ratio — this is what fills the left/right
-    # whitespace, not the clip by itself. The *1.8 below leaves a little
-    # breathing room rather than a razor-tight fit; adjust to taste.
-    lon_min, lon_max = lons.min() - 0.05, lons.max() + 0.05
-    lat_min = lats.min() + GLWU_LAT_CLIP_SOUTH_DEG - 0.05
-    lat_max = lats.max() - GLWU_LAT_CLIP_NORTH_DEG + 0.05
-    extent = [lon_min, lon_max, lat_min, lat_max]
-
-    lat_span = lat_max - lat_min
-    lon_span = lon_max - lon_min
-    fig_h = 10
-    fig_w = max(3.5, fig_h * (lon_span / lat_span) * 1.8)
-
-    fig = plt.figure(figsize=(fig_w, fig_h))
+    fig = plt.figure(figsize=(8, 10))
     ax = plt.axes(projection=ccrs.PlateCarree())
+    extent = [lons.min() - 0.05, lons.max() + 0.05,
+              lats.min() - 0.05, lats.max() + 0.05]
     ax.set_extent(extent, crs=ccrs.PlateCarree())
 
     # Land goes down FIRST as background. Drawing it after the contour
     # (with a higher zorder) paints solid gray over the whole domain,
     # including the water - which is what was hiding the wave data.
     ax.add_feature(cfeature.LAND, facecolor="0.85", zorder=0)
-    ax.add_feature(cfeature.LAKES, facecolor="none", edgecolor="black",
-                    linewidth=0.3, zorder=1)
-    # Cartopy's cfeature module has no built-in COUNTIES constant (unlike
-    # STATES/BORDERS) — Natural Earth does have this layer, just accessed
-    # via NaturalEarthFeature directly instead. Dotted + thin + gray so it
-    # reads as reference detail without competing with the state/border
-    # lines above it.
-    counties = cfeature.NaturalEarthFeature("cultural", "admin_2_counties", "10m",
-                                              facecolor="none", edgecolor="gray")
-    ax.add_feature(counties, linewidth=0.4, linestyle=":", zorder=2)
-    ax.add_feature(cfeature.STATES, edgecolor="black", linewidth=0.6, zorder=4)
-    ax.add_feature(cfeature.BORDERS, edgecolor="black", linewidth=0.9, zorder=4)
-    ax.add_feature(cfeature.COASTLINE, zorder=4, linewidth=0.5)
+    ax.add_feature(cfeature.COASTLINE, zorder=3, linewidth=0.5)
 
     wave_masked = np.ma.masked_invalid(wave_ft)
-    # Fixed 0-5ft scale (GLWU_WAVE_HEIGHT_MAX_FT), not the old dynamic
-    # per-run vmax_ft — extend="max" means a rare >5ft reading saturates
-    # at the top color instead of showing as blank/uncolored.
-    levels = np.linspace(0, GLWU_WAVE_HEIGHT_MAX_FT, 21)
+    levels = np.linspace(0, vmax_ft, 21)
     cf = ax.contourf(lons, lats, wave_masked, levels=levels, cmap="turbo",
-                      extend="max", transform=ccrs.PlateCarree(), zorder=3)
+                      transform=ccrs.PlateCarree(), zorder=2)
     cb = plt.colorbar(cf, ax=ax, orientation="vertical", pad=0.05, shrink=0.7)
-    cb.set_label(f"Significant wave height (ft, fixed 0-{GLWU_WAVE_HEIGHT_MAX_FT:.0f}ft scale)")
+    cb.set_label("Significant wave height (ft)")
 
     s = GLWU_BARB_SKIP
     ax.barbs(lons[::s, ::s], lats[::s, ::s], uu_kt[::s, ::s], vv_kt[::s, ::s],
-              length=5, linewidth=0.7, color="white",
-              transform=ccrs.PlateCarree(), zorder=5)
-
-    # Lat/lon reference gridlines — standard on operational met charts, and
-    # useful for reading off a rough position without needing a ruler.
-    gl = ax.gridlines(draw_labels=True, linewidth=0.3, color="gray", alpha=0.5,
-                       linestyle="--", zorder=1)
-    gl.top_labels = False
-    gl.right_labels = False
-    gl.xlabel_style = {"size": 7}
-    gl.ylabel_style = {"size": 7}
-
-    # BTV marker: NWS seal icon if the fetch succeeds, otherwise a plain
-    # dot so the marker+label still show up rather than silently vanishing.
-    icon = get_nws_icon()
-    if icon is not None:
-        imagebox = OffsetImage(icon, zoom=0.35)
-        ab = AnnotationBbox(imagebox, (BTV_LON, BTV_LAT), frameon=False,
-                             box_alignment=(0.5, 0.5), zorder=6)
-        ax.add_artist(ab)
-    else:
-        ax.plot(BTV_LON, BTV_LAT, marker="o", color="black", markersize=5,
-                 transform=ccrs.PlateCarree(), zorder=6)
-    ax.text(BTV_LON + 0.025, BTV_LAT, "BTV", fontsize=9, fontweight="bold",
-            color="black", transform=ccrs.PlateCarree(), zorder=6,
-            va="center", ha="left")
-
-    # KPBG marker: vector airplane silhouette (see AIRPLANE_PATH above for
-    # why this isn't a Unicode symbol or fetched image).
-    ax.plot(PBG_LON, PBG_LAT, marker=AIRPLANE_PATH, markersize=16, color="black",
-            transform=ccrs.PlateCarree(), zorder=6)
-    ax.text(PBG_LON + 0.025, PBG_LAT, "PBG", fontsize=9, fontweight="bold",
-            color="black", transform=ccrs.PlateCarree(), zorder=6,
-            va="center", ha="left")
-
-    # Other BUFKIT sites, as small reference dots — only the ones that fall
-    # within this particular clipped view. Broader geographic context
-    # without the visual weight of a full marker for every one of them.
-    for site_id, (site_lat, site_lon) in SITE_COORDS.items():
-        if site_id in ("kbtv", "kpbg"):
-            continue
-        if not (extent[0] <= site_lon <= extent[1] and extent[2] <= site_lat <= extent[3]):
-            continue
-        ax.plot(site_lon, site_lat, marker="o", color="black", markersize=3,
-                transform=ccrs.PlateCarree(), zorder=6)
-        ax.text(site_lon + 0.02, site_lat, site_id.upper().lstrip("K"), fontsize=6.5,
-                color="black", transform=ccrs.PlateCarree(), zorder=6,
-                va="center", ha="left")
+              length=5, linewidth=0.6, transform=ccrs.PlateCarree(), zorder=3)
 
     label = "Analysis (current)" if forecast_hour == 0 else f"+{forecast_hour}h forecast"
     ax.set_title(f"GLWU ({GLWU_GRID}) wave height (ft) + wind barbs (kt)\n"
@@ -631,11 +480,10 @@ def glwu_render_frame(swh, u, v, forecast_hour):
 
     # Sanity check: confirm the map itself actually rendered, not just the
     # colorbar — added after a run produced a GIF with a real colorbar but a
-    # completely blank map area, with no exception anywhere in the log and
-    # every individual test locally rendering correctly. Restricted to the
-    # LEFT portion of the frame specifically to exclude the colorbar, which
-    # trivially contains lots of non-white color regardless of whether the
-    # map itself drew anything.
+    # completely blank map area, with no exception anywhere in the log.
+    # Restricted to the LEFT portion of the frame to exclude the colorbar,
+    # which trivially contains lots of non-white color regardless of
+    # whether the map itself drew anything.
     frame_arr = np.array(frame_img)
     map_region = frame_arr[:, :int(frame_img.width * 0.55), :]
     non_white_frac = float(np.mean(np.any(map_region < 240, axis=2)))
@@ -658,15 +506,22 @@ def glwu_build_animation(grib_path: Path, out_gif: Path, n_hours: int = GLWU_N_H
     """
     grbs = pygrib.open(str(grib_path))
 
+    # First pass: gather the messages for each hour and find the max
+    # wave height (in feet) across all of them, so every frame shares
+    # one color scale (an animation that rescales its colorbar frame
+    # to frame is misleading and looks like a flicker/glitch).
     frame_msgs = []
+    vmax_ft = 0.0
     for h in range(n_hours):
         swh = grbs.select(shortName="swh", forecastTime=h)[0]
         u = grbs.select(shortName="u", forecastTime=h)[0]
         v = grbs.select(shortName="v", forecastTime=h)[0]
+        wave, _, _ = swh.data()
+        vmax_ft = max(vmax_ft, float(np.nanmax(wave)) * GLWU_M_TO_FT)
         frame_msgs.append((h, swh, u, v))
 
     pil_frames = [
-        glwu_render_frame(swh, u, v, h) for h, swh, u, v in frame_msgs
+        glwu_render_frame(swh, u, v, h, vmax_ft) for h, swh, u, v in frame_msgs
     ]
     grbs.close()
 
