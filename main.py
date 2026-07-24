@@ -379,7 +379,12 @@ GLWU_GRID = "grlr_500m_lc"          # Lake Champlain 500m grid; swap for a
                                      # if that's what's actually needed
 GLWU_OUTPUT_DIR = Path("./glwu_output")
 GLWU_DOWNLOAD_DIR = Path("./glwu_downloads")
-GLWU_BARB_SKIP = 8                   # subsample wind vectors for barb density
+GLWU_BARB_SKIP_ROW = 8                # ~15% density reduction from the original
+GLWU_BARB_SKIP_COL = 10               # single skip=8 (864 barbs -> 720, -16.7%);
+                                       # an integer-only skip can't hit exactly 15%
+                                       # (skip=9 both directions is -18.5%), this
+                                       # split gets closest while keeping the change
+                                       # small — see conversation notes for the math
 GLWU_N_HOURS = 6                     # analysis hour + 5 forecast hours
 GLWU_FRAME_DURATION_MS = 900          # time each frame is shown in the GIF
 
@@ -552,8 +557,8 @@ def glwu_render_frame(swh, u, v, forecast_hour):
     cb = plt.colorbar(cf, ax=ax, orientation="vertical", pad=0.05, shrink=0.7)
     cb.set_label(f"Significant wave height (ft, fixed 0-{GLWU_WAVE_HEIGHT_MAX_FT:.0f}ft scale)")
 
-    s = GLWU_BARB_SKIP
-    ax.barbs(lons[::s, ::s], lats[::s, ::s], uu_kt[::s, ::s], vv_kt[::s, ::s],
+    sr, sc = GLWU_BARB_SKIP_ROW, GLWU_BARB_SKIP_COL
+    ax.barbs(lons[::sr, ::sc], lats[::sr, ::sc], uu_kt[::sr, ::sc], vv_kt[::sr, ::sc],
               length=5, linewidth=0.6, color="white",
               transform=ccrs.PlateCarree(), zorder=5)
 
