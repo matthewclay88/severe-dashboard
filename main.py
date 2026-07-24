@@ -7,6 +7,7 @@ import gspread
 import json
 import os
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from pathlib import Path
 
 from google.oauth2.service_account import Credentials
@@ -483,69 +484,674 @@ def find_nearest_water_gridpoints(lats, lons, valid_mask, stations):
     return indices
 
 
-def glwu_render_station_forecast_panel(grib_path: Path):
-    """Extract wave height forecast at GLWU_STATIONS from the given GRIB2
-    (already downloaded for the main map — no extra fetch needed) and
-    render as a 2-column x 4-row grid of time-series panels, one per
-    station, each with its own x-axis time labels. Returns a PIL Image."""
+def glwu_render_station_forecast_panel(
+    grib_path: Path,
+    cycle_date: str = None,
+    cycle_hour: str = None,
+):
+    """
+    Extract significant wave-height forecasts at GLWU_STATIONS and render
+    a dashboard-style 2-column x 4-row forecast panel.
+
+    The GRIB extraction is unchanged in principle from the original
+    implementation. Only the presentation has been redesigned.
+    """
+
+    # ============================================================
+    # EXTRACT STATION TIME SERIES FROM GRIB2
+    # ============================================================
+
     grbs = pygrib.open(str(grib_path))
 
     swh0 = grbs.select(shortName="swh", forecastTime=0)[0]
     wave0, lats, lons = swh0.data()
+
     lons = np.where(lons > 180, lons - 360, lons)
-    valid_mask = ~np.ma.getmaskarray(wave0) if np.ma.is_masked(wave0) else np.ones_like(wave0, dtype=bool)
 
-    station_idx = find_nearest_water_gridpoints(lats, lons, valid_mask, GLWU_STATIONS)
+    valid_mask = (
+        ~np.ma.getmaskarray(wave0)
+        if np.ma.is_masked(wave0)
+        else np.ones_like(wave0, dtype=bool)
+    )
 
-    all_fhours = sorted(set(m.forecastTime for m in grbs.select(shortName="swh")))
-    fhours = [h for h in all_fhours if h <= GLWU_STATION_FORECAST_MAX_HOUR]
+    station_idx = find_nearest_water_gridpoints(
+        lats,
+        lons,
+        valid_mask,
+        GLWU_STATIONS,
+    )
+
+    all_fhours = sorted(
+        set(m.forecastTime for m in grbs.select(shortName="swh"))
+    )
+
+    fhours = [
+        h for h in all_fhours
+        if h <= GLWU_STATION_FORECAST_MAX_HOUR
+    ]
 
     times = []
     series = {name: [] for name, _, _ in GLWU_STATIONS}
+
     for h in fhours:
         msg = grbs.select(shortName="swh", forecastTime=h)[0]
         wave_h, _, _ = msg.data()
-        times.append(msg.validDate)
+
+        times.append(msg.validDate.replace(tzinfo=timezone.utc))
+
         for (name, _, _), idx in zip(GLWU_STATIONS, station_idx):
             val = wave_h[idx]
-            series[name].append(float(val) * GLWU_M_TO_FT if not np.ma.is_masked(val) else float("nan"))
+
+            if np.ma.is_masked(val):
+                series[name].append(float("nan"))
+            else:
+                series[name].append(float(val) * GLWU_M_TO_FT)
 
     grbs.close()
 
-    fig, axes = plt.subplots(4, 2, figsize=(11, 12), sharex=True)
-    all_vals = [v for vals in series.values() for v in vals if not np.isnan(v)]
-    ymax = max(2.5, np.ceil((max(all_vals) if all_vals else 1.0) * 1.15 * 2) / 2)
+    if not times:
+        raise RuntimeError("No GLWU forecast times found for station panel.")
+
+    # ============================================================
+    # TIME HANDLING
+    # ============================================================
+
+    local_tz = ZoneInfo("America/New_York")
+
+    local_times = [
+        t.astimezone(local_tz)
+        for t in times
+    ]
+
+    start_local = local_times[0]
+    end_local = local_times[-1]
+
+    # Matplotlib works well with timezone-aware datetimes, but converting
+    # them to numeric values makes card positioning / vertical guides easy.
+    xnums = mdates.date2num(local_times)
+
+    # ============================================================
+    # COMMON WAVE SCALE
+    # ============================================================
+
+    all_vals = [
+        v
+        for vals in series.values()
+        for v in vals
+        if not np.isnan(v)
+    ]
+
+    data_max = max(all_vals) if all_vals else 1.0
+
+    # Keep a minimum 2.5-ft scale so calm days don't exaggerate tiny waves.
+    # Above that, expand in 0.5-ft increments.
+    ymax = max(
+        2.5,
+        np.ceil(data_max * 1.15 * 2.0) / 2.0
+    )
+
+    # ============================================================
+    # DASHBOARD COLORS
+    # ============================================================
+
+    NAVY = "#071d49"
+    BLUE = "#1455d9"
+    BLUE_FILL = "#dce8ff"
+
+    TEXT = "#16213a"
+    MUTED = "#657087"
+
+    BORDER = "#cfd7e6"
+    GRID = "#dfe5ef"
+
+    DAY_SHADE = "#fff8e8"
+    NIGHT_SHADE = "#eef3ff"
+
+    PEAK_LINE = "#2c63c7"
+
+    # ============================================================
+    # CREATE FIGURE
+    # ============================================================
+
+    fig = plt.figure(
+        figsize=(15.5, 9.5),
+        facecolor="#f7f9fc",
+    )
+
+    # Leave space at top for title/time header and at bottom for footer.
+    gs = fig.add_gridspec(
+        nrows=4,
+        ncols=2,
+        left=0.075,
+        right=0.985,
+        bottom=0.095,
+        top=0.80,
+        hspace=0.16,
+        wspace=0.09,
+    )
+
+    axes = []
+
+    # ============================================================
+    # MAIN TITLE
+    # ============================================================
+
+    fig.text(
+        0.5,
+        0.955,
+        "LAKE CHAMPLAIN WAVE FORECAST",
+        ha="center",
+        va="center",
+        fontsize=19,
+        fontweight="bold",
+        color=NAVY,
+    )
+
+    fig.text(
+        0.5,
+        0.921,
+        (
+            f"Forecast through +{GLWU_STATION_FORECAST_MAX_HOUR}h"
+            f"  \u2022  Valid: "
+            f"{start_local:%a %b %d, %-I:%M %p %Z}"
+        ),
+        ha="center",
+        va="center",
+        fontsize=10.5,
+        color=TEXT,
+    )
+
+    # ============================================================
+    # SHARED TIME HEADER
+    # ============================================================
+
+    # We use one compact row across the top rather than repeating
+    # full timestamps underneath every individual chart.
+
+    header_ax = fig.add_axes([0.075, 0.825, 0.91, 0.055])
+
+    header_ax.set_xlim(xnums[0], xnums[-1])
+    header_ax.set_ylim(0, 1)
+
+    header_ax.set_yticks([])
+
+    for spine in header_ax.spines.values():
+        spine.set_visible(False)
+
+    header_ax.tick_params(
+        axis="x",
+        length=0,
+        pad=4,
+        labelsize=9,
+        colors=TEXT,
+    )
+
+    # Major labels every 12 hours.
+    header_ax.xaxis.set_major_locator(
+        mdates.HourLocator(
+            byhour=[0, 6, 12, 18],
+            tz=local_tz,
+        )
+    )
+
+    header_ax.xaxis.set_major_formatter(
+        mdates.DateFormatter(
+            "%-I %p",
+            tz=local_tz,
+        )
+    )
+
+    # ============================================================
+    # DAY / NIGHT SHADING HELPER
+    # ============================================================
+
+    def shade_day_night(ax):
+        """
+        Simple local-time day/night background:
+          daytime = 7 AM through 7 PM
+          nighttime = 7 PM through 7 AM
+
+        This is deliberately simple rather than pretending to calculate
+        exact astronomical sunrise/sunset.
+        """
+
+        cursor = start_local.replace(
+            minute=0,
+            second=0,
+            microsecond=0,
+        ) - timedelta(hours=12)
+
+        finish = end_local + timedelta(hours=12)
+
+        while cursor < finish:
+
+            next_hour = cursor + timedelta(hours=1)
+
+            midpoint = cursor + timedelta(minutes=30)
+
+            is_day = 7 <= midpoint.hour < 19
+
+            ax.axvspan(
+                mdates.date2num(cursor),
+                mdates.date2num(next_hour),
+                facecolor=DAY_SHADE if is_day else NIGHT_SHADE,
+                alpha=0.55 if is_day else 0.48,
+                edgecolor="none",
+                zorder=0,
+            )
+
+            cursor = next_hour
+
+    # ============================================================
+    # INDIVIDUAL STATION CARDS
+    # ============================================================
 
     for i, (name, _, _) in enumerate(GLWU_STATIONS):
-        row, col = divmod(i, 2)
-        ax = axes[row, col]
-        vals = series[name]
-        ax.plot(times, vals, color="#1a56c4", linewidth=1.3)
-        ax.fill_between(times, vals, alpha=0.15, color="#1a56c4")
-        ax.set_title(name, fontsize=10, loc="left", fontweight="bold")
-        ax.set_ylim(0, ymax)
-        ax.set_ylabel("Wave Height (ft)", fontsize=8)
-        ax.grid(True, alpha=0.3)
-        ax.tick_params(labelsize=8)
-        # x-axis labels on EVERY panel, not just the bottom row — with
-        # sharex=True, matplotlib hides tick labels on all but the bottom
-        # subplot by default, which is what was actually missing before.
-        ax.xaxis.set_major_formatter(mdates.DateFormatter("%m/%d %HZ"))
-        ax.xaxis.set_major_locator(mdates.HourLocator(interval=12))
-        ax.tick_params(axis="x", labelbottom=True, rotation=40)
-        ax.set_xlabel("Time (UTC)", fontsize=8)
 
-    fig.suptitle(
-        f"Lake Champlain Wave Height Forecast\n"
-        f"{times[0]:%Y-%m-%d %H:%M} UTC to +{GLWU_STATION_FORECAST_MAX_HOUR}h",
-        fontsize=13, y=1.0,
+        row, col = divmod(i, 2)
+
+        ax = fig.add_subplot(gs[row, col])
+        axes.append(ax)
+
+        vals = np.asarray(series[name], dtype=float)
+
+        # --------------------------------------------------------
+        # CARD APPEARANCE
+        # --------------------------------------------------------
+
+        ax.set_facecolor("white")
+
+        for spine in ax.spines.values():
+            spine.set_color(BORDER)
+            spine.set_linewidth(0.9)
+
+        shade_day_night(ax)
+
+        # --------------------------------------------------------
+        # WAVE CURVE
+        # --------------------------------------------------------
+
+        ax.plot(
+            local_times,
+            vals,
+            color=BLUE,
+            linewidth=1.8,
+            zorder=4,
+        )
+
+        ax.fill_between(
+            local_times,
+            vals,
+            0,
+            color=BLUE_FILL,
+            alpha=0.60,
+            zorder=2,
+        )
+
+        # --------------------------------------------------------
+        # PEAK
+        # --------------------------------------------------------
+
+        finite = np.isfinite(vals)
+
+        if finite.any():
+
+            peak_idx = int(np.nanargmax(vals))
+            peak_val = float(vals[peak_idx])
+            peak_time = local_times[peak_idx]
+
+            ax.scatter(
+                [peak_time],
+                [peak_val],
+                s=36,
+                color=BLUE,
+                edgecolor="white",
+                linewidth=1.0,
+                zorder=7,
+            )
+
+            ax.vlines(
+                peak_time,
+                0,
+                peak_val,
+                color=PEAK_LINE,
+                linestyle="--",
+                linewidth=1.0,
+                alpha=0.85,
+                zorder=3,
+            )
+
+            peak_time_string = peak_time.strftime(
+                "%a %-I %p %Z"
+            )
+
+        else:
+
+            peak_val = float("nan")
+            peak_time_string = "--"
+
+        # --------------------------------------------------------
+        # STATION NUMBER
+        # --------------------------------------------------------
+
+        ax.text(
+            0.018,
+            0.88,
+            str(i + 1),
+            transform=ax.transAxes,
+            ha="center",
+            va="center",
+            fontsize=8.5,
+            fontweight="bold",
+            color="white",
+            bbox=dict(
+                boxstyle="circle,pad=0.35",
+                facecolor=NAVY,
+                edgecolor=NAVY,
+                linewidth=0,
+            ),
+            zorder=10,
+        )
+
+        # --------------------------------------------------------
+        # STATION NAME
+        # --------------------------------------------------------
+
+        ax.text(
+            0.06,
+            0.88,
+            name.upper(),
+            transform=ax.transAxes,
+            ha="left",
+            va="center",
+            fontsize=10.5,
+            fontweight="bold",
+            color=NAVY,
+            zorder=10,
+        )
+
+        # --------------------------------------------------------
+        # PEAK VALUE BLOCK
+        # --------------------------------------------------------
+
+        ax.text(
+            0.965,
+            0.88,
+            "PEAK",
+            transform=ax.transAxes,
+            ha="right",
+            va="center",
+            fontsize=7.5,
+            color=MUTED,
+            zorder=10,
+        )
+
+        if np.isfinite(peak_val):
+
+            ax.text(
+                0.965,
+                0.66,
+                f"{peak_val:.1f} ft",
+                transform=ax.transAxes,
+                ha="right",
+                va="center",
+                fontsize=15,
+                fontweight="bold",
+                color=NAVY,
+                zorder=10,
+            )
+
+            ax.text(
+                0.965,
+                0.47,
+                peak_time_string,
+                transform=ax.transAxes,
+                ha="right",
+                va="center",
+                fontsize=7.5,
+                color=TEXT,
+                zorder=10,
+            )
+
+        else:
+
+            ax.text(
+                0.965,
+                0.66,
+                "--",
+                transform=ax.transAxes,
+                ha="right",
+                va="center",
+                fontsize=15,
+                fontweight="bold",
+                color=MUTED,
+                zorder=10,
+            )
+
+        # --------------------------------------------------------
+        # AXIS LIMITS
+        #
+        # Reserve ~18% of the right side visually for the PEAK block.
+        # --------------------------------------------------------
+
+        time_span = xnums[-1] - xnums[0]
+
+        ax.set_xlim(
+            xnums[0],
+            xnums[-1] + time_span * 0.19,
+        )
+
+        ax.set_ylim(
+            0,
+            ymax,
+        )
+
+        # --------------------------------------------------------
+        # HORIZONTAL GRID
+        # --------------------------------------------------------
+
+        yticks = np.arange(
+            0,
+            ymax + 0.01,
+            0.5,
+        )
+
+        ax.set_yticks(yticks)
+
+        ax.grid(
+            axis="y",
+            color=GRID,
+            linewidth=0.7,
+            alpha=0.75,
+            zorder=1,
+        )
+
+        # --------------------------------------------------------
+        # VERTICAL TIME GUIDES
+        # --------------------------------------------------------
+
+        guide_time = start_local.replace(
+            minute=0,
+            second=0,
+            microsecond=0,
+        )
+
+        while guide_time <= end_local:
+
+            if guide_time.hour in (0, 6, 12, 18):
+
+                ax.axvline(
+                    guide_time,
+                    color=GRID,
+                    linewidth=0.6,
+                    linestyle=":",
+                    zorder=1,
+                )
+
+            guide_time += timedelta(hours=1)
+
+        # --------------------------------------------------------
+        # AXIS LABELS
+        # --------------------------------------------------------
+
+        ax.tick_params(
+            axis="y",
+            labelsize=7.5,
+            colors=TEXT,
+            length=0,
+            pad=5,
+        )
+
+        # Don't repeat timestamps on every chart.
+        ax.set_xticks([])
+
+        # Small baseline.
+        ax.axhline(
+            0,
+            color=BORDER,
+            linewidth=0.8,
+            zorder=3,
+        )
+
+    # ============================================================
+    # SHARED Y LABEL
+    # ============================================================
+
+    fig.text(
+        0.025,
+        0.445,
+        "Wave Height (ft)",
+        rotation=90,
+        ha="center",
+        va="center",
+        fontsize=11,
+        fontweight="bold",
+        color=NAVY,
     )
-    plt.tight_layout()
+
+    # ============================================================
+    # DAY LABELS ABOVE SHARED TIME AXIS
+    # ============================================================
+
+    # Find each local calendar day represented in the forecast.
+    represented_days = []
+
+    cursor_date = start_local.date()
+
+    while cursor_date <= end_local.date():
+
+        represented_days.append(cursor_date)
+
+        cursor_date += timedelta(days=1)
+
+    for day in represented_days:
+
+        day_start = datetime(
+            day.year,
+            day.month,
+            day.day,
+            tzinfo=local_tz,
+        )
+
+        day_end = day_start + timedelta(days=1)
+
+        visible_start = max(
+            mdates.date2num(day_start),
+            xnums[0],
+        )
+
+        visible_end = min(
+            mdates.date2num(day_end),
+            xnums[-1],
+        )
+
+        if visible_end <= visible_start:
+            continue
+
+        center = (visible_start + visible_end) / 2.0
+
+        # Convert x data position into figure coordinates.
+        display_xy = header_ax.transData.transform((center, 1))
+        figure_xy = fig.transFigure.inverted().transform(display_xy)
+
+        fig.text(
+            figure_xy[0],
+            0.888,
+            day_start.strftime("%a %b %d").upper(),
+            ha="center",
+            va="center",
+            fontsize=9,
+            fontweight="bold",
+            color=TEXT,
+        )
+
+    # ============================================================
+    # FOOTER
+    # ============================================================
+
+    footer_text = (
+        f"GLWU {GLWU_GRID}  \u2022  "
+        f"Significant wave height  \u2022  "
+        f"Forecast through +{GLWU_STATION_FORECAST_MAX_HOUR}h"
+    )
+
+    if cycle_date and cycle_hour:
+
+        try:
+            cycle_dt = datetime.strptime(
+                cycle_date + cycle_hour,
+                "%Y%m%d%H",
+            ).replace(tzinfo=timezone.utc)
+
+            cycle_local = cycle_dt.astimezone(local_tz)
+
+            footer_text += (
+                f"  \u2022  Model cycle "
+                f"{cycle_local:%b %d %-I %p %Z}"
+            )
+
+        except Exception:
+            pass
+
+    fig.text(
+        0.075,
+        0.045,
+        footer_text,
+        ha="left",
+        va="center",
+        fontsize=8,
+        color=MUTED,
+    )
+
+    fig.text(
+        0.985,
+        0.045,
+        "NOAA / NCEP GLWU",
+        ha="right",
+        va="center",
+        fontsize=8,
+        fontweight="bold",
+        color=NAVY,
+    )
+
+    # ============================================================
+    # SAVE TO PIL IMAGE
+    # ============================================================
 
     buf = io.BytesIO()
-    plt.savefig(buf, format="png", dpi=110, bbox_inches="tight")
+
+    plt.savefig(
+        buf,
+        format="png",
+        dpi=130,
+        facecolor=fig.get_facecolor(),
+        bbox_inches="tight",
+    )
+
     plt.close(fig)
+
     buf.seek(0)
+
     return Image.open(buf).convert("RGB")
 
 
@@ -874,7 +1480,11 @@ def run_glwu_plot():
         # here (e.g. a station coordinate landing somewhere unexpected) can't
         # take down the already-working map animation above.
         try:
-            station_panel = glwu_render_station_forecast_panel(grib_dest)
+            station_panel = glwu_render_station_forecast_panel(
+                grib_dest,
+                cycle_date=date_str,
+                cycle_hour=hour_str,
+            )
             station_panel_path = GLWU_OUTPUT_DIR / "stations_latest.png"
             station_panel.save(station_panel_path)
             print(f"  Saved {station_panel_path} (8-station forecast, "
