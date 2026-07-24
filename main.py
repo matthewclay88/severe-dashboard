@@ -587,7 +587,7 @@ def glwu_render_station_forecast_panel(
     # Above that, expand in 0.5-ft increments.
     ymax = max(
         2.5,
-        np.ceil(data_max * 1.15 * 2.0) / 2.0
+        np.ceil(data_max * 1.10 * 2.0) / 2.0
     )
 
     # ============================================================
@@ -623,9 +623,9 @@ def glwu_render_station_forecast_panel(
         ncols=2,
         left=0.085,
         right=0.985,
-        bottom=0.075,
-        top=0.82,
-        hspace=0.12,
+        bottom=0.065,
+        top=0.865,
+        hspace=0.10,
         wspace=0.08,
     )
 
@@ -637,7 +637,7 @@ def glwu_render_station_forecast_panel(
 
     fig.text(
         0.5,
-        0.955,
+        0.965,
         "LAKE CHAMPLAIN WAVE FORECAST",
         ha="center",
         va="center",
@@ -648,7 +648,7 @@ def glwu_render_station_forecast_panel(
 
     fig.text(
         0.5,
-        0.921,
+        0.938,
         (
             f"Forecast through +{GLWU_STATION_FORECAST_MAX_HOUR}h"
             f"  \u2022  Valid: "
@@ -667,7 +667,9 @@ def glwu_render_station_forecast_panel(
     # We use one compact row across the top rather than repeating
     # full timestamps underneath every individual chart.
 
-    header_ax = fig.add_axes([0.085, 0.835, 0.90, 0.045])
+    header_ax = fig.add_axes([0.085, 0.875, 0.90, 0.025])
+    header_ax.set_facecolor("none")
+    header_ax.patch.set_alpha(0)
 
     header_ax.set_xlim(xnums[0], xnums[-1])
     header_ax.set_ylim(0, 1)
@@ -1075,7 +1077,7 @@ def glwu_render_station_forecast_panel(
 
         fig.text(
             figure_xy[0],
-            0.895,
+            0.910,
             day_start.strftime("%a %b %d").upper(),
             ha="center",
             va="center",
