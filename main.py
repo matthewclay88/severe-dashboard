@@ -388,6 +388,13 @@ GLWU_FRAME_DURATION_MS = 900          # time each frame is shown in the GIF
 GLWU_M_TO_FT = 3.28084
 GLWU_MS_TO_KT = 1.94384
 
+# Fixed color scale instead of a per-run dynamic max — a dynamic scale means
+# the same color could represent 0.5ft on a calm day and 3ft on a rough one,
+# which is misleading at a glance from across the ops floor. Values above
+# this just saturate at the top color (extend="max" in contourf below)
+# rather than being hidden/blank.
+GLWU_WAVE_HEIGHT_MAX_FT = 5.0
+
 # Tighter map framing to kill the left/right whitespace: the raw grid spans
 # the full ~2.0 degrees of latitude from South Bay up into Missisquoi
 # Bay/Quebec, far more than the main operational lake body needs, and the
@@ -490,11 +497,11 @@ def get_nws_icon():
         return None
 
 
-def glwu_render_frame(swh, u, v, forecast_hour, vmax_ft):
-    """Render one frame (one forecast hour) as a PIL Image, using a
-    shared vmax_ft across all frames so the color scale doesn't jump
-    around between frames of the same animation. Converts GRIB2's
-    native meters/m-s to feet/knots for display."""
+def glwu_render_frame(swh, u, v, forecast_hour):
+    """Render one frame (one forecast hour) as a PIL Image. Converts GRIB2's
+    native meters/m-s to feet/knots for display. Uses a fixed color scale
+    (GLWU_WAVE_HEIGHT_MAX_FT) rather than a per-run dynamic max, so frames
+    are also directly comparable day to day, not just within one animation."""
     wave, lats, lons = swh.data()
     uu, _, _ = u.data()
     vv, _, _ = v.data()
@@ -539,11 +546,11 @@ def glwu_render_frame(swh, u, v, forecast_hour, vmax_ft):
     ax.add_feature(cfeature.COASTLINE, zorder=4, linewidth=0.5)
 
     wave_masked = np.ma.masked_invalid(wave_ft)
-    levels = np.linspace(0, vmax_ft, 21)
+    levels = np.linspace(0, GLWU_WAVE_HEIGHT_MAX_FT, 21)
     cf = ax.contourf(lons, lats, wave_masked, levels=levels, cmap="turbo",
-                      transform=ccrs.PlateCarree(), zorder=3)
+                      extend="max", transform=ccrs.PlateCarree(), zorder=3)
     cb = plt.colorbar(cf, ax=ax, orientation="vertical", pad=0.05, shrink=0.7)
-    cb.set_label("Significant wave height (ft)")
+    cb.set_label(f"Significant wave height (ft, fixed 0-{GLWU_WAVE_HEIGHT_MAX_FT:.0f}ft scale)")
 
     s = GLWU_BARB_SKIP
     ax.barbs(lons[::s, ::s], lats[::s, ::s], uu_kt[::s, ::s], vv_kt[::s, ::s],
@@ -569,9 +576,12 @@ def glwu_render_frame(swh, u, v, forecast_hour, vmax_ft):
     # why this isn't a Unicode symbol or fetched image).
     ax.plot(PBG_LON, PBG_LAT, marker=AIRPLANE_PATH, markersize=16, color="black",
             transform=ccrs.PlateCarree(), zorder=6)
-    ax.text(PBG_LON + 0.025, PBG_LAT, "PBG", fontsize=9, fontweight="bold",
+    # Left-aligned (extends west of the marker) rather than right — PBG sits
+    # close enough to the shore that offsetting the label east/right (like
+    # BTV's) landed the text over the water instead of on solid ground.
+    ax.text(PBG_LON - 0.025, PBG_LAT, "PBG", fontsize=9, fontweight="bold",
             color="black", transform=ccrs.PlateCarree(), zorder=6,
-            va="center", ha="left")
+            va="center", ha="right")
 
     label = "Analysis (current)" if forecast_hour == 0 else f"+{forecast_hour}h forecast"
     ax.set_title(f"GLWU ({GLWU_GRID}) wave height (ft) + wind barbs (kt)\n"
@@ -611,22 +621,15 @@ def glwu_build_animation(grib_path: Path, out_gif: Path, n_hours: int = GLWU_N_H
     """
     grbs = pygrib.open(str(grib_path))
 
-    # First pass: gather the messages for each hour and find the max
-    # wave height (in feet) across all of them, so every frame shares
-    # one color scale (an animation that rescales its colorbar frame
-    # to frame is misleading and looks like a flicker/glitch).
     frame_msgs = []
-    vmax_ft = 0.0
     for h in range(n_hours):
         swh = grbs.select(shortName="swh", forecastTime=h)[0]
         u = grbs.select(shortName="u", forecastTime=h)[0]
         v = grbs.select(shortName="v", forecastTime=h)[0]
-        wave, _, _ = swh.data()
-        vmax_ft = max(vmax_ft, float(np.nanmax(wave)) * GLWU_M_TO_FT)
         frame_msgs.append((h, swh, u, v))
 
     pil_frames = [
-        glwu_render_frame(swh, u, v, h, vmax_ft) for h, swh, u, v in frame_msgs
+        glwu_render_frame(swh, u, v, h) for h, swh, u, v in frame_msgs
     ]
     grbs.close()
 
