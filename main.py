@@ -26,6 +26,7 @@ import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 import matplotlib.path as mpath
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+import cartopy
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 import pygrib
@@ -626,7 +627,26 @@ def glwu_render_frame(swh, u, v, forecast_hour):
     plt.savefig(buf, format="png", dpi=110, bbox_inches="tight")
     plt.close(fig)
     buf.seek(0)
-    return Image.open(buf).convert("RGB")
+    frame_img = Image.open(buf).convert("RGB")
+
+    # Sanity check: confirm the map itself actually rendered, not just the
+    # colorbar — added after a run produced a GIF with a real colorbar but a
+    # completely blank map area, with no exception anywhere in the log and
+    # every individual test locally rendering correctly. Restricted to the
+    # LEFT portion of the frame specifically to exclude the colorbar, which
+    # trivially contains lots of non-white color regardless of whether the
+    # map itself drew anything.
+    frame_arr = np.array(frame_img)
+    map_region = frame_arr[:, :int(frame_img.width * 0.55), :]
+    non_white_frac = float(np.mean(np.any(map_region < 240, axis=2)))
+    if non_white_frac < 0.05:
+        print(f"  WARNING: forecast hour {forecast_hour} frame's map area is "
+              f"almost entirely blank ({non_white_frac:.1%} non-white) — the "
+              f"map likely failed to render even though no exception was "
+              f"raised. matplotlib={matplotlib.__version__}, "
+              f"cartopy={cartopy.__version__}")
+
+    return frame_img
 
 
 def glwu_build_animation(grib_path: Path, out_gif: Path, n_hours: int = GLWU_N_HOURS):
@@ -705,6 +725,8 @@ def run_glwu_plot():
     the pipeline (Sheets writes, etc.)."""
     try:
         print("\n=== GLWU wave height + wind barbs (animated loop) ===")
+        print(f"  matplotlib={matplotlib.__version__}, cartopy={cartopy.__version__}, "
+              f"pygrib={pygrib.__version__ if hasattr(pygrib, '__version__') else 'unknown'}")
         date_str, hour_str, url = glwu_find_latest_cycle()
         print(f"  Latest cycle found: {date_str} t{hour_str}z -> {url}")
 
