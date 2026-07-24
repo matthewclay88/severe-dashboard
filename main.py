@@ -24,6 +24,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.path as mpath
+import matplotlib.dates as mdates
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 import cartopy
 import cartopy.crs as ccrs
@@ -819,6 +820,20 @@ def run_glwu_plot():
         # so Drive doesn't accumulate one file per run, every 15
         # minutes, forever.
         glwu_upload_to_drive(latest_gif, "glwu_latest.gif", mimetype="image/gif")
+
+        # 8-station vertical forecast chart — reuses the same already-downloaded
+        # grib_dest, no extra fetch. Wrapped in its own try/except so a failure
+        # here (e.g. a station coordinate landing somewhere unexpected) can't
+        # take down the already-working map animation above.
+        try:
+            station_panel = glwu_render_station_forecast_panel(grib_dest)
+            station_panel_path = GLWU_OUTPUT_DIR / "stations_latest.png"
+            station_panel.save(station_panel_path)
+            print(f"  Saved {station_panel_path} (8-station forecast, "
+                  f"+{GLWU_STATION_FORECAST_MAX_HOUR}h forward)")
+            glwu_upload_to_drive(station_panel_path, "glwu_stations_latest.png", mimetype="image/png")
+        except Exception as e:
+            print(f"  WARNING: 8-station forecast panel failed: {e}")
 
     except Exception as e:
         print(f"  WARNING: GLWU plot step failed: {e}")
