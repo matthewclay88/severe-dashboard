@@ -486,8 +486,8 @@ def find_nearest_water_gridpoints(lats, lons, valid_mask, stations):
 def glwu_render_station_forecast_panel(grib_path: Path):
     """Extract wave height forecast at GLWU_STATIONS from the given GRIB2
     (already downloaded for the main map — no extra fetch needed) and
-    render as a vertical stack of 8 time-series panels, one per station.
-    Returns a PIL Image."""
+    render as a 2-column x 4-row grid of time-series panels, one per
+    station, each with its own x-axis time labels. Returns a PIL Image."""
     grbs = pygrib.open(str(grib_path))
 
     swh0 = grbs.select(shortName="swh", forecastTime=0)[0]
@@ -512,28 +512,33 @@ def glwu_render_station_forecast_panel(grib_path: Path):
 
     grbs.close()
 
-    fig, axes = plt.subplots(len(GLWU_STATIONS), 1, figsize=(7, 16), sharex=True)
+    fig, axes = plt.subplots(4, 2, figsize=(11, 12), sharex=True)
     all_vals = [v for vals in series.values() for v in vals if not np.isnan(v)]
     ymax = max(2.5, np.ceil((max(all_vals) if all_vals else 1.0) * 1.15 * 2) / 2)
 
-    for ax, (name, _, _) in zip(axes, GLWU_STATIONS):
+    for i, (name, _, _) in enumerate(GLWU_STATIONS):
+        row, col = divmod(i, 2)
+        ax = axes[row, col]
         vals = series[name]
         ax.plot(times, vals, color="#1a56c4", linewidth=1.3)
         ax.fill_between(times, vals, alpha=0.15, color="#1a56c4")
         ax.set_title(name, fontsize=10, loc="left", fontweight="bold")
         ax.set_ylim(0, ymax)
-        ax.set_ylabel("ft", fontsize=8)
+        ax.set_ylabel("Wave Height (ft)", fontsize=8)
         ax.grid(True, alpha=0.3)
         ax.tick_params(labelsize=8)
-
-    axes[-1].xaxis.set_major_formatter(mdates.DateFormatter("%m/%d %HZ"))
-    axes[-1].xaxis.set_major_locator(mdates.HourLocator(interval=12))
-    plt.setp(axes[-1].get_xticklabels(), rotation=45, ha="right")
+        # x-axis labels on EVERY panel, not just the bottom row — with
+        # sharex=True, matplotlib hides tick labels on all but the bottom
+        # subplot by default, which is what was actually missing before.
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%m/%d %HZ"))
+        ax.xaxis.set_major_locator(mdates.HourLocator(interval=12))
+        ax.tick_params(axis="x", labelbottom=True, rotation=40)
+        ax.set_xlabel("Time (UTC)", fontsize=8)
 
     fig.suptitle(
         f"Lake Champlain Wave Height Forecast\n"
         f"{times[0]:%Y-%m-%d %H:%M} UTC to +{GLWU_STATION_FORECAST_MAX_HOUR}h",
-        fontsize=12, y=0.995,
+        fontsize=13, y=1.0,
     )
     plt.tight_layout()
 
