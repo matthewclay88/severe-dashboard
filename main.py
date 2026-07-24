@@ -661,48 +661,6 @@ def glwu_render_station_forecast_panel(
     )
 
     # ============================================================
-    # SHARED TIME HEADER
-    # ============================================================
-
-    # We use one compact row across the top rather than repeating
-    # full timestamps underneath every individual chart.
-
-    header_ax = fig.add_axes([0.085, 0.882, 0.90, 0.025])
-    header_ax.set_facecolor("none")
-    header_ax.patch.set_alpha(0)
-
-    header_ax.set_xlim(xnums[0], xnums[-1])
-    header_ax.set_ylim(0, 1)
-
-    header_ax.set_yticks([])
-
-    for spine in header_ax.spines.values():
-        spine.set_visible(False)
-
-    header_ax.tick_params(
-        axis="x",
-        length=0,
-        pad=0,
-        labelsize=9,
-        colors=TEXT,
-    )
-
-    # Major labels every 12 hours.
-    header_ax.xaxis.set_major_locator(
-        mdates.HourLocator(
-            byhour=[0, 6, 12, 18],
-            tz=local_tz,
-        )
-    )
-
-    header_ax.xaxis.set_major_formatter(
-        mdates.DateFormatter(
-            "%-I %p",
-            tz=local_tz,
-        )
-    )
-
-    # ============================================================
     # DAY / NIGHT SHADING HELPER
     # ============================================================
 
@@ -992,6 +950,33 @@ def glwu_render_station_forecast_panel(
             guide_time += timedelta(hours=1)
 
         # --------------------------------------------------------
+        # MIDNIGHT / DAY BOUNDARIES
+        # --------------------------------------------------------
+
+        midnight = start_local.replace(
+            hour=0,
+            minute=0,
+            second=0,
+            microsecond=0,
+        )
+
+        if midnight <= start_local:
+            midnight += timedelta(days=1)
+
+        while midnight < end_local:
+
+            ax.axvline(
+                midnight,
+                color="#aeb8c8",
+                linewidth=1.0,
+                linestyle="-",
+                alpha=0.85,
+                zorder=2,
+            )
+
+            midnight += timedelta(days=1)
+
+        # --------------------------------------------------------
         # AXIS LABELS
         # --------------------------------------------------------
 
@@ -1015,6 +1000,150 @@ def glwu_render_station_forecast_panel(
         )
 
     # ============================================================
+    # COLUMN TIME HEADERS
+    # ============================================================
+
+    # Each chart reserves 19% of its width on the right for the PEAK
+    # information block. The actual forecast curve occupies the
+    # original xnums[0] -> xnums[-1] range.
+    #
+    # Build one independent timeline header for each chart column.
+
+    header_axes = []
+
+    for column_ax in (axes[0], axes[1]):
+
+        pos = column_ax.get_position()
+
+        # Match the header width to the actual forecast-time portion
+        # of the subplot, excluding the PEAK information area.
+        time_fraction = 1.0 / 1.19
+
+        header_left = pos.x0
+        header_width = pos.width * time_fraction
+
+        # Place directly above the first chart row.
+        header_bottom = pos.y1 + 0.006
+        header_height = 0.022
+
+        hax = fig.add_axes([
+            header_left,
+            header_bottom,
+            header_width,
+            header_height,
+        ])
+
+        hax.set_xlim(
+            xnums[0],
+            xnums[-1],
+        )
+
+        hax.set_ylim(0, 1)
+
+        hax.set_facecolor("none")
+        hax.patch.set_alpha(0)
+
+        hax.set_yticks([])
+
+        for spine in hax.spines.values():
+            spine.set_visible(False)
+
+        # Time labels every 6 hours.
+        hax.xaxis.set_major_locator(
+            mdates.HourLocator(
+                byhour=[0, 6, 12, 18],
+                tz=local_tz,
+            )
+        )
+
+        hax.xaxis.set_major_formatter(
+            mdates.DateFormatter(
+                "%-I %p",
+                tz=local_tz,
+            )
+        )
+
+        hax.tick_params(
+            axis="x",
+            length=0,
+            pad=0,
+            labelsize=7.5,
+            colors=TEXT,
+        )
+
+        header_axes.append(hax)
+
+
+    # ============================================================
+    # DAY-OF-WEEK LABELS FOR EACH COLUMN
+    # ============================================================
+
+    represented_days = []
+
+    cursor_date = start_local.date()
+
+    while cursor_date <= end_local.date():
+        represented_days.append(cursor_date)
+        cursor_date += timedelta(days=1)
+
+
+    for hax in header_axes:
+
+        for day in represented_days:
+
+            day_start = datetime(
+                day.year,
+                day.month,
+                day.day,
+                tzinfo=local_tz,
+            )
+
+            day_end = day_start + timedelta(days=1)
+
+            # Only use the portion of this calendar day that actually
+            # falls within the 48-hour forecast.
+            visible_start = max(
+                mdates.date2num(day_start),
+                xnums[0],
+            )
+
+            visible_end = min(
+                mdates.date2num(day_end),
+                xnums[-1],
+            )
+
+            if visible_end <= visible_start:
+                continue
+
+            # Center the weekday label over the portion of the
+            # forecast belonging to that calendar day.
+            center = (
+                visible_start + visible_end
+            ) / 2.0
+
+            # Convert that location from the header's data coordinates
+            # into overall figure coordinates.
+            display_xy = hax.transData.transform(
+                (center, 1)
+            )
+
+            figure_xy = fig.transFigure.inverted().transform(
+                display_xy
+            )
+
+            fig.text(
+                figure_xy[0],
+                hax.get_position().y1 + 0.012,
+                day_start.strftime("%a").upper(),
+                ha="center",
+                va="bottom",
+                fontsize=8,
+                fontweight="bold",
+                color=NAVY,
+            )
+
+
+    # ============================================================
     # SHARED Y LABEL
     # ============================================================
 
@@ -1029,62 +1158,22 @@ def glwu_render_station_forecast_panel(
         fontweight="bold",
         color=NAVY,
     )
-
+    
     # ============================================================
-    # DAY LABELS ABOVE SHARED TIME AXIS
+    # SHARED Y LABEL
     # ============================================================
 
-    # Find each local calendar day represented in the forecast.
-    represented_days = []
-
-    cursor_date = start_local.date()
-
-    while cursor_date <= end_local.date():
-
-        represented_days.append(cursor_date)
-
-        cursor_date += timedelta(days=1)
-
-    for day in represented_days:
-
-        day_start = datetime(
-            day.year,
-            day.month,
-            day.day,
-            tzinfo=local_tz,
-        )
-
-        day_end = day_start + timedelta(days=1)
-
-        visible_start = max(
-            mdates.date2num(day_start),
-            xnums[0],
-        )
-
-        visible_end = min(
-            mdates.date2num(day_end),
-            xnums[-1],
-        )
-
-        if visible_end <= visible_start:
-            continue
-
-        center = (visible_start + visible_end) / 2.0
-
-        # Convert x data position into figure coordinates.
-        display_xy = header_ax.transData.transform((center, 1))
-        figure_xy = fig.transFigure.inverted().transform(display_xy)
-
-        fig.text(
-            figure_xy[0],
-            0.910,
-            day_start.strftime("%a %b %d").upper(),
-            ha="center",
-            va="center",
-            fontsize=9,
-            fontweight="bold",
-            color=TEXT,
-        )
+    fig.text(
+        0.025,
+        0.445,
+        "Wave Height (ft)",
+        rotation=90,
+        ha="center",
+        va="center",
+        fontsize=11,
+        fontweight="bold",
+        color=NAVY,
+    )
 
     # ============================================================
     # FOOTER
