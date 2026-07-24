@@ -441,6 +441,107 @@ AIRPLANE_PATH = mpath.Path([
 # with a 403/404.
 GLWU_DRIVE_FOLDER_ID = os.environ.get("GLWU_DRIVE_FOLDER_ID", "")
 
+# ============================================================
+# 8-STATION WAVE HEIGHT FORECAST (vertical stacked chart)
+# ============================================================
+# Forward forecast only, no observed history — the GRIB2 already gives us
+# up to 48h forward from a single already-downloaded cycle, no need to
+# accumulate data across runs the way a 10-day observed+forecast chart
+# (like GLERL's own site) would require.
+#
+# Coordinates are the nearest-water-grid-point approximation of each named
+# location; two (the NDBC/CDIP buoys) are exact station coordinates, the
+# rest are well-known lake landmarks. All landed within ~1km of the actual
+# grid point actually used EXCEPT Whitehall, NY (~18km off) — that narrow
+# southernmost channel isn't well-resolved by this grid, consistent with
+# it showing near-zero wave heights in GLERL's own chart too.
+GLWU_STATIONS = [
+    ("Burlington, VT", 44.476, -73.221),
+    ("Rouses Point, NY", 44.994, -73.367),
+    ("Port Henry, NY", 44.048, -73.458),
+    ("Essex-Charlotte Ferry", 44.297, -73.320),
+    ("Whitehall, NY", 43.554, -73.404),
+    ("Philipsburg, QC", 45.033, -73.083),
+    ("Inland Sea, Buoy 45166", 44.785, -73.258),
+    ("Schuyler Reef, Buoy 251", 44.4877, -73.3391),
+]
+GLWU_STATION_FORECAST_MAX_HOUR = 48  # matches the short-cycle forecast length
+
+
+def find_nearest_water_gridpoints(lats, lons, valid_mask, stations):
+    """For each (name, lat, lon) in stations, find the closest grid index
+    that actually has valid (non-masked/water) data — a naive nearest-point
+    lookup could otherwise land on a masked land cell right next to the
+    real target and silently return NaN forever."""
+    indices = []
+    for name, slat, slon in stations:
+        dist2 = (lats - slat) ** 2 + (lons - slon) ** 2
+        dist2_masked = np.where(valid_mask, dist2, np.inf)
+        idx = np.unravel_index(np.argmin(dist2_masked), dist2_masked.shape)
+        indices.append(idx)
+    return indices
+
+
+def glwu_render_station_forecast_panel(grib_path: Path):
+    """Extract wave height forecast at GLWU_STATIONS from the given GRIB2
+    (already downloaded for the main map — no extra fetch needed) and
+    render as a vertical stack of 8 time-series panels, one per station.
+    Returns a PIL Image."""
+    grbs = pygrib.open(str(grib_path))
+
+    swh0 = grbs.select(shortName="swh", forecastTime=0)[0]
+    wave0, lats, lons = swh0.data()
+    lons = np.where(lons > 180, lons - 360, lons)
+    valid_mask = ~np.ma.getmaskarray(wave0) if np.ma.is_masked(wave0) else np.ones_like(wave0, dtype=bool)
+
+    station_idx = find_nearest_water_gridpoints(lats, lons, valid_mask, GLWU_STATIONS)
+
+    all_fhours = sorted(set(m.forecastTime for m in grbs.select(shortName="swh")))
+    fhours = [h for h in all_fhours if h <= GLWU_STATION_FORECAST_MAX_HOUR]
+
+    times = []
+    series = {name: [] for name, _, _ in GLWU_STATIONS}
+    for h in fhours:
+        msg = grbs.select(shortName="swh", forecastTime=h)[0]
+        wave_h, _, _ = msg.data()
+        times.append(msg.validDate)
+        for (name, _, _), idx in zip(GLWU_STATIONS, station_idx):
+            val = wave_h[idx]
+            series[name].append(float(val) * GLWU_M_TO_FT if not np.ma.is_masked(val) else float("nan"))
+
+    grbs.close()
+
+    fig, axes = plt.subplots(len(GLWU_STATIONS), 1, figsize=(7, 16), sharex=True)
+    all_vals = [v for vals in series.values() for v in vals if not np.isnan(v)]
+    ymax = max(2.5, np.ceil((max(all_vals) if all_vals else 1.0) * 1.15 * 2) / 2)
+
+    for ax, (name, _, _) in zip(axes, GLWU_STATIONS):
+        vals = series[name]
+        ax.plot(times, vals, color="#1a56c4", linewidth=1.3)
+        ax.fill_between(times, vals, alpha=0.15, color="#1a56c4")
+        ax.set_title(name, fontsize=10, loc="left", fontweight="bold")
+        ax.set_ylim(0, ymax)
+        ax.set_ylabel("ft", fontsize=8)
+        ax.grid(True, alpha=0.3)
+        ax.tick_params(labelsize=8)
+
+    axes[-1].xaxis.set_major_formatter(mdates.DateFormatter("%m/%d %HZ"))
+    axes[-1].xaxis.set_major_locator(mdates.HourLocator(interval=12))
+    plt.setp(axes[-1].get_xticklabels(), rotation=45, ha="right")
+
+    fig.suptitle(
+        f"Lake Champlain Wave Height Forecast\n"
+        f"{times[0]:%Y-%m-%d %H:%M} UTC to +{GLWU_STATION_FORECAST_MAX_HOUR}h",
+        fontsize=12, y=0.995,
+    )
+    plt.tight_layout()
+
+    buf = io.BytesIO()
+    plt.savefig(buf, format="png", dpi=110, bbox_inches="tight")
+    plt.close(fig)
+    buf.seek(0)
+    return Image.open(buf).convert("RGB")
+
 
 def glwu_find_latest_cycle():
     """
