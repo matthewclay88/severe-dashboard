@@ -1048,29 +1048,60 @@ def glwu_render_station_forecast_panel(
         for spine in hax.spines.values():
             spine.set_visible(False)
 
-        # Time labels every 6 hours.
-        hax.xaxis.set_major_locator(
-            mdates.HourLocator(
-                byhour=[0, 6, 12, 18],
-                tz=local_tz,
+        # --------------------------------------------------------
+        # DYNAMIC 6-HOUR TIME LABELS
+        # --------------------------------------------------------
+        #
+        # Draw these ourselves instead of using normal x tick
+        # labels. This keeps labels centered over their actual
+        # forecast times while preventing the first/last labels
+        # from hanging outside the usable timeline area.
+
+        hax.set_xticks([])
+
+        first_x = xnums[0]
+        last_x = xnums[-1]
+        span_x = last_x - first_x
+
+        # Small inset used only when a label falls right against
+        # one of the timeline boundaries.
+        edge_pad = span_x * 0.018
+
+        label_time = start_local.replace(
+            minute=0,
+            second=0,
+            microsecond=0,
+        )
+
+        # Advance to the first 00/06/12/18 local-time boundary
+        # at or after the forecast start.
+        while label_time.hour not in (0, 6, 12, 18):
+            label_time += timedelta(hours=1)
+
+        while label_time <= end_local:
+
+            label_x = mdates.date2num(label_time)
+
+            # Keep the text safely inside the timeline.
+            draw_x = min(
+                max(label_x, first_x + edge_pad),
+                last_x - edge_pad,
             )
-        )
 
-        hax.xaxis.set_major_formatter(
-            mdates.DateFormatter(
-                "%-I %p",
-                tz=local_tz,
+            hax.text(
+                draw_x,
+                0.08,
+                label_time.strftime("%-I %p"),
+                transform=hax.transData,
+                ha="center",
+                va="bottom",
+                fontsize=7.5,
+                color=TEXT,
+                clip_on=False,
             )
-        )
 
-        hax.tick_params(
-            axis="x",
-            length=0,
-            pad=0,
-            labelsize=7.5,
-            colors=TEXT,
-        )
-
+            label_time += timedelta(hours=6)
+        
         header_axes.append(hax)
 
 
