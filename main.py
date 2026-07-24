@@ -386,7 +386,7 @@ GLWU_BARB_SKIP_COL = 10               # single skip=8 (864 barbs -> 720, -16.7%)
                                        # (skip=9 both directions is -18.5%), this
                                        # split gets closest while keeping the change
                                        # small — see conversation notes for the math
-GLWU_N_HOURS = 6                     # analysis hour + 5 forecast hours
+GLWU_N_HOURS = 12                    # analysis hour + 11 forecast hours
 GLWU_FRAME_DURATION_MS = 900          # time each frame is shown in the GIF
 
 # GRIB2 stores these in meters and m/s (WMO convention); convert for display
@@ -609,6 +609,48 @@ def get_nws_icon():
         return None
 
 
+def recenter_map_horizontally(img, title_height_px=100):
+    """The tight-bbox crop centers the OVERALL canvas (map + colorbar +
+    labels combined), which isn't the same as centering the map/lake itself
+    — the colorbar's asymmetric footprint on the right was measurably
+    shifting the lake ~6.5px left of true center. This measures exactly
+    where the map's own content sits (the first contiguous non-white block
+    below the title, since the colorbar is a separate block further right)
+    and pads whichever side is short so the map itself ends up centered,
+    rather than fighting matplotlib's internal subplot margins indirectly."""
+    arr = np.array(img.convert("RGB"))
+    h, w = arr.shape[:2]
+    body = arr[title_height_px:, :]
+    is_white = np.all(body > 245, axis=2)
+    col_has_content = ~np.all(is_white, axis=0)
+    content_cols = np.where(col_has_content)[0]
+    if len(content_cols) == 0:
+        return img
+
+    gaps = np.where(np.diff(content_cols) > 3)[0]
+    segments = []
+    start = content_cols[0]
+    for g in gaps:
+        segments.append((start, content_cols[g]))
+        start = content_cols[g + 1]
+    segments.append((start, content_cols[-1]))
+
+    map_left, map_right = segments[0]  # first block = the map itself
+    map_center = (map_left + map_right) / 2
+
+    # Solve for the padding that makes the map's center land exactly on the
+    # new canvas's center: pad > 0 goes on the left, pad < 0 (abs value) on
+    # the right — see conversation notes for the derivation.
+    signed_pad = w - 2 * map_center
+    pad = int(round(abs(signed_pad)))
+    if pad < 1:
+        return img
+
+    canvas = Image.new("RGB", (w + pad, h), (255, 255, 255))
+    canvas.paste(img, (pad if signed_pad > 0 else 0, 0))
+    return canvas
+
+
 def glwu_render_frame(swh, u, v, forecast_hour):
     """Render one frame (one forecast hour) as a PIL Image. Converts GRIB2's
     native meters/m-s to feet/knots for display. Uses a fixed color scale
@@ -704,6 +746,7 @@ def glwu_render_frame(swh, u, v, forecast_hour):
     plt.close(fig)
     buf.seek(0)
     frame_img = Image.open(buf).convert("RGB")
+    frame_img = recenter_map_horizontally(frame_img)
 
     # Sanity check: confirm the map itself actually rendered, not just the
     # colorbar — added after a run produced a GIF with a real colorbar but a
