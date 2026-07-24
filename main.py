@@ -23,6 +23,8 @@ from metpy.calc import (
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import matplotlib.path as mpath
+from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 import cartopy
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
@@ -386,6 +388,40 @@ GLWU_FRAME_DURATION_MS = 900          # time each frame is shown in the GIF
 GLWU_M_TO_FT = 3.28084
 GLWU_MS_TO_KT = 1.94384
 
+# Tighter map framing to kill the left/right whitespace: the raw grid spans
+# the full ~2.0 degrees of latitude from South Bay up into Missisquoi
+# Bay/Quebec, far more than the main operational lake body needs, and the
+# narrow (~0.45 deg wide) lake ends up tiny in a tall, mostly-empty figure.
+# Trimming north/south zooms in on the main body; the figure width is also
+# computed FROM the resulting aspect ratio (see glwu_render_frame) instead
+# of a fixed 8in — that's what actually eliminates the empty margins,
+# clipping alone can't fully fix it on its own.
+GLWU_LAT_CLIP_SOUTH_DEG = 0.15
+GLWU_LAT_CLIP_NORTH_DEG = 0.35
+
+BTV_LAT, BTV_LON = 44.4719, -73.1503   # Burlington, VT
+PBG_LAT, PBG_LON = 44.6508, -73.4681   # Plattsburgh, NY
+
+# NWS-specific seal, NOT the NOAA "meatball". weather.gov's own favicon.ico
+# is actually the NOAA logo — the two are distinct, separately-trademarked
+# marks. The correct NWS seal is the second of two badges in weather.gov's
+# own page-header banner image; NWS_LOGO_CROP_BOX is the pixel-precise crop
+# for it (found by scanning the banner for non-white column runs).
+NWS_LOGO_URL = "https://www.weather.gov/bundles/templating/images/header/header.png"
+NWS_LOGO_CROP_BOX = (56, 0, 104, 60)  # (left, top, right, bottom) in source pixels
+
+# Simple top-down airplane silhouette for the KPBG marker — a hand-built
+# vector path rather than a Unicode symbol (e.g. "✈") or a fetched image.
+# Deliberate: this runs unattended on a GitHub Actions runner that may not
+# share the same font/glyph coverage as wherever it's tested — a vector
+# path renders identically everywhere, no font dependency at all.
+AIRPLANE_PATH = mpath.Path([
+    (0, 1.0), (0.08, 0.55), (0.5, 0.15), (0.5, 0.02), (0.1, 0.12),
+    (0.1, -0.35), (0.28, -0.55), (0.28, -0.65), (0, -0.5),
+    (-0.28, -0.65), (-0.28, -0.55), (-0.1, -0.35), (-0.1, 0.12),
+    (-0.5, 0.02), (-0.5, 0.15), (-0.08, 0.55), (0, 1.0),
+])
+
 # Drive folder the plot gets uploaded to (the runner's disk is wiped after
 # each GitHub Actions run, so this is what actually persists). The folder
 # must be shared with the service account's email (found in
@@ -430,6 +466,30 @@ def glwu_download(url, dest: Path):
     return dest
 
 
+_nws_icon_cache = None
+
+
+def get_nws_icon():
+    """Fetch the official NWS seal — cropped from weather.gov's own page
+    header banner, not the favicon (that's the NOAA "meatball" instead) —
+    once per script run and cache it in memory. Returns None (marker falls
+    back to a plain dot) if the fetch ever fails, so a network hiccup here
+    can't take down the whole plot."""
+    global _nws_icon_cache
+    if _nws_icon_cache is not None:
+        return _nws_icon_cache
+    try:
+        resp = requests.get(NWS_LOGO_URL, timeout=15)
+        resp.raise_for_status()
+        banner = Image.open(io.BytesIO(resp.content))
+        badge = banner.crop(NWS_LOGO_CROP_BOX)
+        _nws_icon_cache = np.array(badge.convert("RGBA"))
+        return _nws_icon_cache
+    except Exception as e:
+        print(f"  WARNING: could not fetch NWS icon for BTV marker: {e}")
+        return None
+
+
 def glwu_render_frame(swh, u, v, forecast_hour, vmax_ft):
     """Render one frame (one forecast hour) as a PIL Image, using a
     shared vmax_ft across all frames so the color scale doesn't jump
@@ -445,28 +505,73 @@ def glwu_render_frame(swh, u, v, forecast_hour, vmax_ft):
     uu_kt = uu * GLWU_MS_TO_KT
     vv_kt = vv * GLWU_MS_TO_KT
 
-    fig = plt.figure(figsize=(8, 10))
+    # Clip north/south to zoom in on the main lake body (GLWU_LAT_CLIP_*
+    # above), then size the figure to actually match the resulting aspect
+    # ratio — that's what fills the left/right whitespace, not the clip by
+    # itself. The *1.8 leaves a little breathing room rather than a
+    # razor-tight fit.
+    lon_min, lon_max = lons.min() - 0.05, lons.max() + 0.05
+    lat_min = lats.min() + GLWU_LAT_CLIP_SOUTH_DEG - 0.05
+    lat_max = lats.max() - GLWU_LAT_CLIP_NORTH_DEG + 0.05
+    extent = [lon_min, lon_max, lat_min, lat_max]
+    lat_span = lat_max - lat_min
+    lon_span = lon_max - lon_min
+    fig_h = 10
+    fig_w = max(3.5, fig_h * (lon_span / lat_span) * 1.8)
+
+    fig = plt.figure(figsize=(fig_w, fig_h))
     ax = plt.axes(projection=ccrs.PlateCarree())
-    extent = [lons.min() - 0.05, lons.max() + 0.05,
-              lats.min() - 0.05, lats.max() + 0.05]
     ax.set_extent(extent, crs=ccrs.PlateCarree())
 
     # Land goes down FIRST as background. Drawing it after the contour
     # (with a higher zorder) paints solid gray over the whole domain,
     # including the water - which is what was hiding the wave data.
     ax.add_feature(cfeature.LAND, facecolor="0.85", zorder=0)
-    ax.add_feature(cfeature.COASTLINE, zorder=3, linewidth=0.5)
+    # cfeature has no built-in COUNTIES constant (unlike STATES/BORDERS) —
+    # Natural Earth does have this layer, just accessed via
+    # NaturalEarthFeature directly. Dotted + thin + gray so it reads as
+    # reference detail without competing with state/border lines.
+    counties = cfeature.NaturalEarthFeature("cultural", "admin_2_counties", "10m",
+                                              facecolor="none", edgecolor="gray")
+    ax.add_feature(counties, linewidth=0.4, linestyle=":", zorder=2)
+    ax.add_feature(cfeature.STATES, edgecolor="black", linewidth=0.6, zorder=4)
+    ax.add_feature(cfeature.BORDERS, edgecolor="black", linewidth=0.9, zorder=4)
+    ax.add_feature(cfeature.COASTLINE, zorder=4, linewidth=0.5)
 
     wave_masked = np.ma.masked_invalid(wave_ft)
     levels = np.linspace(0, vmax_ft, 21)
     cf = ax.contourf(lons, lats, wave_masked, levels=levels, cmap="turbo",
-                      transform=ccrs.PlateCarree(), zorder=2)
+                      transform=ccrs.PlateCarree(), zorder=3)
     cb = plt.colorbar(cf, ax=ax, orientation="vertical", pad=0.05, shrink=0.7)
     cb.set_label("Significant wave height (ft)")
 
     s = GLWU_BARB_SKIP
     ax.barbs(lons[::s, ::s], lats[::s, ::s], uu_kt[::s, ::s], vv_kt[::s, ::s],
-              length=5, linewidth=0.6, transform=ccrs.PlateCarree(), zorder=3)
+              length=5, linewidth=0.6, color="white",
+              transform=ccrs.PlateCarree(), zorder=5)
+
+    # BTV marker: NWS seal icon if the fetch succeeds, otherwise a plain
+    # dot so the marker+label still show up rather than silently vanishing.
+    icon = get_nws_icon()
+    if icon is not None:
+        imagebox = OffsetImage(icon, zoom=0.35)
+        ab = AnnotationBbox(imagebox, (BTV_LON, BTV_LAT), frameon=False,
+                             box_alignment=(0.5, 0.5), zorder=6)
+        ax.add_artist(ab)
+    else:
+        ax.plot(BTV_LON, BTV_LAT, marker="o", color="black", markersize=5,
+                 transform=ccrs.PlateCarree(), zorder=6)
+    ax.text(BTV_LON + 0.025, BTV_LAT, "BTV", fontsize=9, fontweight="bold",
+            color="black", transform=ccrs.PlateCarree(), zorder=6,
+            va="center", ha="left")
+
+    # PBG marker: vector airplane silhouette (see AIRPLANE_PATH above for
+    # why this isn't a Unicode symbol or fetched image).
+    ax.plot(PBG_LON, PBG_LAT, marker=AIRPLANE_PATH, markersize=16, color="black",
+            transform=ccrs.PlateCarree(), zorder=6)
+    ax.text(PBG_LON + 0.025, PBG_LAT, "PBG", fontsize=9, fontweight="bold",
+            color="black", transform=ccrs.PlateCarree(), zorder=6,
+            va="center", ha="left")
 
     label = "Analysis (current)" if forecast_hour == 0 else f"+{forecast_hour}h forecast"
     ax.set_title(f"GLWU ({GLWU_GRID}) wave height (ft) + wind barbs (kt)\n"
