@@ -1,9 +1,14 @@
 {
   "station": "Mount Mansfield Stake",
-  "as_of_date": "2026-07-24",
-  "current_depth_in": 0.0,
-  "normal_depth_in": 0.0,
-  "departure_in": 0.0,
-  "departure_text": "Near normal",
-  "generated_at": "2026-07-25T18:08:23.898920+00:00"
+  "source": "matthewparrilla.com/mansfield-stake (NWS Daily Hydromet Report)",
+  "season": null,
+  "as_of_date": "2026-07-25",
+  "generated_at": "2026-07-25T18:23:47.924979+00:00",
+  "observed_date_label": null,
+  "current_depth_in": null,
+  "normal_depth_in": null,
+  "departure_in": null,
+  "departure_text": "Off-season \u2014 no current tracking",
+  "rank": null,
+  "rank_of": null
 }
