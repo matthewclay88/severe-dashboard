@@ -34,7 +34,16 @@ V1 intentionally does NOT calculate:
     precipitation type
 
 Requirements:
-    pip install requests numpy matplotlib metpy
+    pip install requests numpy matplotlib metpy google-api-python-client google-auth
+
+Workflow note:
+    This script writes its PNGs into outputs/. For the dashboard's
+    <img> tags to load them reliably, the workflow needs "permissions:
+    contents: write" and a commit/push step after this script runs -
+    see the accompanying yml diff. Do not rely on the Drive upload
+    below for the public-facing dashboard embed; Drive enforces an
+    anonymous per-file download quota that makes direct hotlinking
+    from a public webpage unreliable.
 """
 
 import os
@@ -119,8 +128,10 @@ NWS_OB_LIMIT = 20
 # Number of hourly RRS products to search backward.
 RRS_LOOKBACK_HOURS = 6
 
-OUTPUT_FILE = "vt_pseudo_sounding.png"
-CARD_OUTPUT_FILE = "vt_dashboard_card.png"
+REPO_OUTPUT_DIR = "outputs"
+
+OUTPUT_FILE = os.path.join(REPO_OUTPUT_DIR, "vt_pseudo_sounding.png")
+CARD_OUTPUT_FILE = os.path.join(REPO_OUTPUT_DIR, "vt_dashboard_card.png")
 
 # Google Drive destination for the rendered PNG. Reuses the same
 # service account as main.py (GOOGLE_CREDENTIALS). Falls back to
@@ -3149,6 +3160,8 @@ def plot_dashboard_card(profile, diagnostics):
 # =====================================================================
 
 def main():
+
+    os.makedirs(REPO_OUTPUT_DIR, exist_ok=True)
 
     observations = fetch_all()
 
