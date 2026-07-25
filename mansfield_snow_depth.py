@@ -1,29 +1,51 @@
 """
-Mount Mansfield Snow Depth Status
+Mount Mansfield Snow Depth
 ----------------------------------
 
-Fetches the NWS BTV snow-depth time series for Mount Mansfield (current
-season, climatological average, and the historical max/min envelope)
-and computes the latest observed depth compared to normal for that
-date, plus a season-chart PNG matching the one on
-https://www.weather.gov/btv/recreation.
+Two independent data sources, kept separate on purpose:
 
-Source format note: despite the .xml extension, these are not real XML
-data documents - each is a thin <data><text>...</text></data> wrapper
-around a JavaScript array literal of [Date.UTC(y,m,d), depth_inches]
-pairs (as used directly by a Highcharts series). Date.UTC's month
-argument is 0-indexed (0=Jan), unlike Python's date().month.
+1. CHART (Max/Min/Avg/Current-season lines) - the 4 NWS BTV feeds,
+   maintained by NWS, matching the season chart on
+   https://www.weather.gov/btv/recreation.
+
+2. CURRENT DEPTH + DEPARTURE FROM NORMAL - Matt Parrilla's full-history
+   CSV (https://matthewparrilla.com/mansfield-stake/), which tracks
+   the same stake but goes back to 1954 (vs. the NWS feeds' single
+   climatological average), so departure-from-normal here is checked
+   against real season-by-season history rather than one blended
+   average curve.
+
+   Note: matthewparrilla.com also publishes a JSON feed
+   (mansfield-observations.json) with temperature/wind/precip, but as
+   of this writing it hasn't updated since Jan 2026 - that one is not
+   used here. The CSV is the one that's current (verified via its S3
+   Last-Modified header, not just eyeballing values).
+
+Source format notes:
+    - The NWS .xml files are not real XML - each is a thin
+      <data><text>...</text></data> wrapper around a JS array literal
+      of [Date.UTC(y,m,d), depth_inches] pairs. Date.UTC's month is
+      0-indexed (0=Jan), unlike Python's date().month.
+    - The Parrilla CSV is wide-format: one row per ski season
+      ("2025-2026"), one column per day of the season ("9/1".."6/30" -
+      it only tracks Sep-Jun, not summer), plus a final "Average
+      Season" row with the climatological mean for each day. It's
+      served gzip-Content-Encoded, which `requests` decompresses
+      automatically - no manual gzip handling needed.
 
 Data sources:
     https://www.weather.gov/source/btv/rec/mmn/2025-2026depth.xml
     https://www.weather.gov/source/btv/rec/mmn/avgdepth.xml
     https://www.weather.gov/source/btv/rec/mmn/maxdepth.xml
     https://www.weather.gov/source/btv/rec/mmn/mindepth.xml
+    https://s3.amazonaws.com/matthewparrilla.com/snow-depth.csv
 
 Requirements:
     pip install requests matplotlib
 """
 
+import csv
+import io
 import json
 import os
 import re
@@ -36,10 +58,17 @@ import matplotlib.dates as mdates
 
 import requests
 
+# ---- Chart data sources (NWS, unchanged) ----
+
 CURRENT_URL = "https://www.weather.gov/source/btv/rec/mmn/2025-2026depth.xml"
 AVERAGE_URL = "https://www.weather.gov/source/btv/rec/mmn/avgdepth.xml"
 MAX_URL = "https://www.weather.gov/source/btv/rec/mmn/maxdepth.xml"
 MIN_URL = "https://www.weather.gov/source/btv/rec/mmn/mindepth.xml"
+
+# ---- Current depth / departure data source (Parrilla CSV) ----
+
+HISTORY_CSV_URL = "https://s3.amazonaws.com/matthewparrilla.com/snow-depth.csv"
+AVERAGE_ROW_LABEL = "Average Season"
 
 HEADERS = {
     "User-Agent": (
@@ -53,9 +82,13 @@ STATUS_OUTPUT_FILE = os.path.join(REPO_OUTPUT_DIR, "vt_snow_depth_status.json")
 CHART_OUTPUT_FILE = os.path.join(REPO_OUTPUT_DIR, "vt_snow_depth_chart.png")
 
 
+# =====================================================================
+# CHART (NWS feeds - unchanged)
+# =====================================================================
+
 def fetch_depth_series(url):
     """
-    Download one depth-series file and parse it into a
+    Download one NWS depth-series file and parse it into a
     {date: depth_inches} dict.
     """
 
@@ -94,79 +127,6 @@ def fetch_depth_series(url):
         records[record_date] = float(value_str)
 
     return records
-
-
-def latest_observed_date(records, as_of):
-    """
-    Most recent date in `records` that is on or before `as_of`.
-    """
-
-    valid_dates = [d for d in records if d <= as_of]
-
-    if not valid_dates:
-        raise ValueError("No observed dates on or before as_of.")
-
-    return max(valid_dates)
-
-
-def normal_for_date(average_records, target_date):
-    """
-    Climatological average depth for the given month/day, regardless
-    of which year the average series happens to encode it under.
-    """
-
-    for record_date, value in average_records.items():
-
-        if (
-            record_date.month == target_date.month
-            and record_date.day == target_date.day
-        ):
-            return value
-
-    return None
-
-
-def build_snow_depth_status(as_of=None):
-    """
-    Fetch both series and return a dict describing the current snow
-    depth status, ready to serialize to JSON for a dashboard card.
-    """
-
-    as_of = as_of or datetime.now(timezone.utc).date()
-
-    current_series = fetch_depth_series(CURRENT_URL)
-    average_series = fetch_depth_series(AVERAGE_URL)
-
-    obs_date = latest_observed_date(current_series, as_of)
-    current_depth = current_series[obs_date]
-
-    normal_depth = normal_for_date(average_series, obs_date)
-
-    if normal_depth is None:
-
-        departure = None
-        departure_text = "Normal unavailable"
-
-    else:
-
-        departure = current_depth - normal_depth
-
-        if abs(departure) < 0.5:
-            departure_text = "Near normal"
-        elif departure > 0:
-            departure_text = f"+{departure:.0f} in above normal"
-        else:
-            departure_text = f"{departure:.0f} in below normal"
-
-    return {
-        "station": "Mount Mansfield Stake",
-        "as_of_date": obs_date.isoformat(),
-        "current_depth_in": current_depth,
-        "normal_depth_in": normal_depth,
-        "departure_in": departure,
-        "departure_text": departure_text,
-        "generated_at": datetime.now(timezone.utc).isoformat(),
-    }
 
 
 def plot_snow_depth_chart(current_series, average_series, max_series, min_series):
@@ -216,19 +176,174 @@ def plot_snow_depth_chart(current_series, average_series, max_series, min_series
     print(f"Saved snow depth chart to: {CHART_OUTPUT_FILE}")
 
 
-def main():
+# =====================================================================
+# CURRENT DEPTH / DEPARTURE (Parrilla full-history CSV)
+# =====================================================================
 
-    os.makedirs(REPO_OUTPUT_DIR, exist_ok=True)
+def fetch_snow_depth_history():
+    """
+    Fetch and parse the full-history CSV: one row per ski season back
+    to 1954, one column per day of the season (9/1 through 6/30 - it
+    doesn't track summer), plus a final "Average Season" row.
 
-    current_series = fetch_depth_series(CURRENT_URL)
-    average_series = fetch_depth_series(AVERAGE_URL)
-    max_series = fetch_depth_series(MAX_URL)
-    min_series = fetch_depth_series(MIN_URL)
+    Returns (day_labels, season_rows) where day_labels is the ordered
+    list of "M/D" column headers and season_rows is
+    {season_label: [value_str, ...]} (values are raw strings - some
+    cells are blank for unreported days).
+    """
 
-    as_of = datetime.now(timezone.utc).date()
-    obs_date = latest_observed_date(current_series, as_of)
-    current_depth = current_series[obs_date]
-    normal_depth = normal_for_date(average_series, obs_date)
+    response = requests.get(HISTORY_CSV_URL, headers=HEADERS, timeout=30)
+    response.raise_for_status()
+
+    reader = csv.reader(io.StringIO(response.text))
+    rows = list(reader)
+
+    day_labels = rows[0][1:]
+    season_rows = {row[0]: row[1:] for row in rows[1:] if row}
+
+    return day_labels, season_rows
+
+
+def season_label_for_date(d):
+    """
+    Ski-season label ("2025-2026") the given calendar date falls in.
+    The dataset only tracks Sep 1 - Jun 30; returns None for Jul/Aug
+    (the off-season gap between one season ending and the next
+    starting - there's genuinely nothing to report, not just a gap
+    in an otherwise-continuous series).
+    """
+
+    if d.month >= 9:
+        return f"{d.year}-{d.year + 1}"
+
+    if d.month <= 6:
+        return f"{d.year - 1}-{d.year}"
+
+    return None
+
+
+def latest_reported_index(day_labels, values, as_of_label):
+    """
+    Index of the most recent column at or before `as_of_label` ("M/D")
+    that has a non-blank value in `values`, walking backward to skip
+    gaps in reporting (this dataset has real gaps - scattered blank
+    cells, not just zeros).
+    """
+
+    start = day_labels.index(as_of_label) if as_of_label in day_labels else len(day_labels) - 1
+
+    for i in range(start, -1, -1):
+
+        if i < len(values) and values[i].strip() != "":
+            return i
+
+    return None
+
+
+def rank_for_day(day_labels, season_rows, day_index, current_depth):
+    """
+    Where the current depth ranks among all historical seasons' depth
+    on this same day-of-season (1 = deepest on record for this date).
+    Returns (rank, total_seasons_compared, deepest_season_label) or
+    (None, 0, None) if there's nothing to compare against.
+    """
+
+    comparisons = []
+
+    for season, values in season_rows.items():
+
+        if season == AVERAGE_ROW_LABEL:
+            continue
+
+        if day_index >= len(values):
+            continue
+
+        raw = values[day_index].strip()
+
+        if raw == "":
+            continue
+
+        try:
+            comparisons.append((season, float(raw)))
+        except ValueError:
+            continue
+
+    if not comparisons:
+        return None, 0, None
+
+    comparisons.sort(key=lambda pair: pair[1], reverse=True)
+
+    deepest_season = comparisons[0][0]
+
+    rank = 1
+
+    for season, value in comparisons:
+
+        if value > current_depth:
+            rank += 1
+
+    return rank, len(comparisons), deepest_season
+
+
+def build_snow_depth_observation(as_of=None):
+    """
+    Current depth + departure from normal (and rank against 70+ years
+    of history), from Matt Parrilla's snow-depth.csv.
+    """
+
+    as_of = as_of or datetime.now(timezone.utc).date()
+
+    day_labels, season_rows = fetch_snow_depth_history()
+
+    season_label = season_label_for_date(as_of)
+
+    base_result = {
+        "station": "Mount Mansfield Stake",
+        "source": "matthewparrilla.com/mansfield-stake (NWS Daily Hydromet Report)",
+        "season": season_label,
+        "as_of_date": as_of.isoformat(),
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    if season_label is None or season_label not in season_rows:
+
+        return {
+            **base_result,
+            "observed_date_label": None,
+            "current_depth_in": None,
+            "normal_depth_in": None,
+            "departure_in": None,
+            "departure_text": "Off-season \u2014 no current tracking",
+            "rank": None,
+            "rank_of": None,
+        }
+
+    as_of_label = f"{as_of.month}/{as_of.day}"
+
+    current_values = season_rows[season_label]
+    idx = latest_reported_index(day_labels, current_values, as_of_label)
+
+    if idx is None:
+
+        return {
+            **base_result,
+            "observed_date_label": None,
+            "current_depth_in": None,
+            "normal_depth_in": None,
+            "departure_in": None,
+            "departure_text": "No data reported yet this season",
+            "rank": None,
+            "rank_of": None,
+        }
+
+    current_depth = float(current_values[idx])
+    obs_label = day_labels[idx]
+
+    average_values = season_rows.get(AVERAGE_ROW_LABEL, [])
+    normal_depth = None
+
+    if idx < len(average_values) and average_values[idx].strip() != "":
+        normal_depth = float(average_values[idx])
 
     if normal_depth is None:
 
@@ -246,15 +361,43 @@ def main():
         else:
             departure_text = f"{departure:.0f} in below normal"
 
-    status = {
-        "station": "Mount Mansfield Stake",
-        "as_of_date": obs_date.isoformat(),
+    rank, rank_of, deepest_season = rank_for_day(
+        day_labels, season_rows, idx, current_depth
+    )
+
+    return {
+        **base_result,
+        "observed_date_label": obs_label,
         "current_depth_in": current_depth,
         "normal_depth_in": normal_depth,
         "departure_in": departure,
         "departure_text": departure_text,
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "rank": rank,
+        "rank_of": rank_of,
+        "deepest_season_on_this_date": deepest_season,
     }
+
+
+# =====================================================================
+# MAIN
+# =====================================================================
+
+def main():
+
+    os.makedirs(REPO_OUTPUT_DIR, exist_ok=True)
+
+    # Chart: NWS feeds, unchanged.
+
+    current_series = fetch_depth_series(CURRENT_URL)
+    average_series = fetch_depth_series(AVERAGE_URL)
+    max_series = fetch_depth_series(MAX_URL)
+    min_series = fetch_depth_series(MIN_URL)
+
+    plot_snow_depth_chart(current_series, average_series, max_series, min_series)
+
+    # Current depth + departure: Parrilla's full-history CSV.
+
+    status = build_snow_depth_observation()
 
     print(json.dumps(status, indent=2))
 
@@ -262,8 +405,6 @@ def main():
         json.dump(status, f, indent=2)
 
     print(f"\nSaved status to {STATUS_OUTPUT_FILE}")
-
-    plot_snow_depth_chart(current_series, average_series, max_series, min_series)
 
 
 if __name__ == "__main__":
