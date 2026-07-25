@@ -120,6 +120,7 @@ NWS_OB_LIMIT = 20
 RRS_LOOKBACK_HOURS = 6
 
 OUTPUT_FILE = "vt_pseudo_sounding.png"
+CARD_OUTPUT_FILE = "vt_dashboard_card.png"
 
 # Google Drive destination for the rendered PNG. Reuses the same
 # service account as main.py (GOOGLE_CREDENTIALS). Falls back to
@@ -2908,6 +2909,242 @@ def upload_to_drive(filepath, folder_id, filename=None):
 
 
 # =====================================================================
+# 12B. COMPACT DASHBOARD CARD
+# =====================================================================
+#
+# A second, purpose-built output alongside the full Skew-T: sized and
+# styled to sit in a dashboard grid next to the existing station
+# cards. Deliberately drops everything that only earns its place at
+# "study this closely" size - the background adiabat/mixing lines,
+# the station table, the wind barb column, dewpoint - and keeps only
+# what answers "rain, snow, or something worse, and where."
+
+CARD_BG_COLOR = "white"
+CARD_BORDER_NORMAL = "#dee2e6"
+CARD_BORDER_RISK = "#c1590f"
+CARD_MUTED = "#6b7688"
+CARD_BLUE = "#1e5fa8"
+CARD_SNOW = "#3f7cc9"
+CARD_RAIN = "#c1590f"
+
+
+def temperature_sign_bands(profile):
+    """
+    Walk the elevation-sorted profile and return a list of
+    (elev_low, elev_high, is_above_freezing) bands, splitting at any
+    0 C crossing between stations (interpolated). Used to shade the
+    compact card's background by freezing/non-freezing layer.
+    """
+
+    bands = []
+
+    for lower, upper in zip(profile, profile[1:]):
+
+        z1, t1 = lower["elevation_ft"], lower["temperature_C"]
+        z2, t2 = upper["elevation_ft"], upper["temperature_C"]
+
+        if (t1 >= 0) == (t2 >= 0):
+
+            bands.append((z1, z2, t1 >= 0))
+            continue
+
+        crossing = interp_crossing(z1, t1, z2, t2, 0.0)
+
+        if crossing is None:
+
+            bands.append((z1, z2, t1 >= 0))
+            continue
+
+        bands.append((z1, crossing, t1 >= 0))
+        bands.append((crossing, z2, t2 >= 0))
+
+    return bands
+
+
+def plot_dashboard_card(profile, diagnostics):
+    """
+    Render the compact dashboard card to CARD_OUTPUT_FILE.
+    """
+
+    fig = plt.figure(figsize=(4.0, 5.0))
+
+    precip_type = diagnostics["precip_type"]
+    has_warm_nose = diagnostics["warm_layer_ft"] is not None
+
+    border_color = CARD_BORDER_RISK if has_warm_nose else CARD_BORDER_NORMAL
+
+    # Card background + left accent border, matching the existing
+    # dashboard's card vernacular (white card, colored left border).
+
+    outer_ax = fig.add_axes([0, 0, 1, 1])
+    outer_ax.set_xlim(0, 1)
+    outer_ax.set_ylim(0, 1)
+    outer_ax.axis("off")
+
+    outer_ax.add_patch(
+        FancyBboxPatch(
+            (0.02, 0.02), 0.96, 0.96,
+            boxstyle="round,pad=0,rounding_size=0.02",
+            linewidth=1.2,
+            edgecolor=CARD_BORDER_NORMAL,
+            facecolor=CARD_BG_COLOR,
+            zorder=0,
+        )
+    )
+
+    outer_ax.add_patch(
+        plt.Rectangle(
+            (0.02, 0.02), 0.018, 0.96,
+            facecolor=border_color,
+            edgecolor="none",
+            zorder=1,
+        )
+    )
+
+    # ---------------- Header ----------------
+
+    outer_ax.text(
+        0.53, 0.955, "MOUNT MANSFIELD",
+        fontsize=13, fontweight="bold", color="black",
+        ha="center", va="top",
+    )
+
+    outer_ax.text(
+        0.53, 0.915, "Green Mountains",
+        fontsize=9.5, fontweight="bold", color=CARD_BLUE,
+        ha="center", va="top",
+    )
+
+    if has_warm_nose:
+
+        outer_ax.text(
+            0.53, 0.865, "\u26a0 FZRA RISK",
+            fontsize=9, fontweight="bold", color=CARD_BORDER_RISK,
+            ha="center", va="top",
+            bbox=dict(
+                boxstyle="round,pad=0.35",
+                facecolor="#fdeee0",
+                edgecolor="none",
+            ),
+        )
+
+    # ---------------- Simplified elevation profile ----------------
+
+    chart_ax = fig.add_axes([0.20, 0.30, 0.68, 0.48])
+
+    elevations = [x["elevation_ft"] for x in profile]
+    temps = [x["temperature_C"] for x in profile]
+
+    z_min, z_max = min(elevations), max(elevations)
+    t_min, t_max = min(temps), max(temps)
+
+    t_pad = max((t_max - t_min) * 0.25, 2.0)
+    z_pad = (z_max - z_min) * 0.05
+
+    chart_ax.set_xlim(t_min - t_pad, t_max + t_pad)
+    chart_ax.set_ylim(z_min - z_pad, z_max + z_pad)
+
+    for z1, z2, is_warm in temperature_sign_bands(profile):
+
+        chart_ax.axhspan(
+            z1, z2,
+            color=CARD_RAIN if is_warm else CARD_SNOW,
+            alpha=0.10, zorder=0,
+        )
+
+    if t_min - t_pad <= 0 <= t_max + t_pad:
+
+        chart_ax.axvline(
+            0, color="black", linewidth=1.0, alpha=0.5, zorder=2,
+        )
+
+    chart_ax.plot(
+        temps, elevations,
+        color=CARD_RAIN, linewidth=2.5,
+        marker="o", markersize=5, zorder=5,
+    )
+
+    chart_ax.set_yticks(elevations)
+    chart_ax.set_yticklabels(
+        [f"{e:.0f}" for e in elevations], fontsize=7.5, color=CARD_MUTED,
+    )
+
+    chart_ax.set_xticks(
+        [round(t_min - t_pad / 2), 0, round(t_max + t_pad / 2)]
+    )
+    chart_ax.tick_params(axis="x", labelsize=7.5, colors=CARD_MUTED)
+
+    for spine_name in ("top", "right"):
+        chart_ax.spines[spine_name].set_visible(False)
+
+    for spine_name in ("left", "bottom"):
+        chart_ax.spines[spine_name].set_color(CARD_BORDER_NORMAL)
+
+    chart_ax.tick_params(colors=CARD_MUTED, length=3)
+
+    # ---------------- Headline readout ----------------
+
+    freezing_level = diagnostics["freezing_level_ft"]
+
+    if freezing_level is not None:
+
+        headline_value = f"{freezing_level:,.0f} ft"
+        headline_color = CARD_BLUE
+
+    elif profile[0]["temperature_C"] >= 0:
+
+        headline_value = "All Rain"
+        headline_color = CARD_RAIN
+
+    else:
+
+        headline_value = "All Snow"
+        headline_color = CARD_SNOW
+
+    outer_ax.text(
+        0.53, 0.215, "RAIN / SNOW LINE",
+        fontsize=9, fontweight="bold", color=CARD_MUTED,
+        ha="center", va="top",
+    )
+
+    outer_ax.text(
+        0.53, 0.185, headline_value,
+        fontsize=20, fontweight="bold", color=headline_color,
+        ha="center", va="top",
+    )
+
+    outer_ax.text(
+        0.53, 0.09, f"Precip type: {precip_type}",
+        fontsize=8.5, color=CARD_MUTED,
+        ha="center", va="top",
+    )
+
+    # ---------------- Footer ----------------
+
+    latest_times = [
+        parse_iso_time(x.get("temperature_time"))
+        for x in profile
+        if parse_iso_time(x.get("temperature_time")) is not None
+    ]
+
+    if latest_times:
+
+        newest = max(latest_times)
+
+        outer_ax.text(
+            0.53, 0.04, f"Updated {newest.strftime('%H:%M UTC')}",
+            fontsize=7.5, color=CARD_MUTED,
+            ha="center", va="top",
+        )
+
+    plt.savefig(CARD_OUTPUT_FILE, dpi=175)
+    plt.close(fig)
+
+    print()
+    print(f"Saved dashboard card to: {CARD_OUTPUT_FILE}")
+
+
+# =====================================================================
 # 13. MAIN
 # =====================================================================
 
@@ -2959,7 +3196,16 @@ def main():
         diagnostics,
     )
 
+    plot_dashboard_card(
+        profile,
+        diagnostics,
+    )
+
     upload_to_drive(OUTPUT_FILE, DRIVE_FOLDER_ID, DRIVE_UPLOAD_FILENAME)
+
+    # Not uploading CARD_OUTPUT_FILE yet - add a second
+    # upload_to_drive(CARD_OUTPUT_FILE, ..., ...) call here whenever
+    # you're ready to wire the card into the dashboard.
 
 
 if __name__ == "__main__":
