@@ -4,8 +4,8 @@
   "froude_number": 0.09,
   "flow_regime": "Blocked",
   "freezing_level_ft": null,
-  "mean_lapse_rate_C_km": 8.9,
-  "bulk_shear_kt": 9.0,
-  "observed_at": "2026-07-25T20:50:00+00:00",
-  "generated_at": "2026-07-25T21:06:24.279821+00:00"
+  "mean_lapse_rate_C_km": 8.5,
+  "bulk_shear_kt": 11.0,
+  "observed_at": "2026-07-25T21:18:00+00:00",
+  "generated_at": "2026-07-25T21:21:17.155364+00:00"
 }
