@@ -48,6 +48,7 @@ Workflow note:
 
 import os
 import re
+import math
 from datetime import datetime, timedelta, timezone
 
 import numpy as np
@@ -132,6 +133,7 @@ REPO_OUTPUT_DIR = "outputs"
 
 OUTPUT_FILE = os.path.join(REPO_OUTPUT_DIR, "vt_pseudo_sounding.png")
 CARD_OUTPUT_FILE = os.path.join(REPO_OUTPUT_DIR, "vt_dashboard_card.png")
+TABLE_OUTPUT_FILE = os.path.join(REPO_OUTPUT_DIR, "vt_station_table.png")
 
 # Google Drive destination for the rendered PNG. Reuses the same
 # service account as main.py (GOOGLE_CREDENTIALS). Falls back to
@@ -240,6 +242,25 @@ def ft_to_m(feet):
     """
 
     return feet * 0.3048
+
+
+def choose_tick_interval(axis_range, target_ticks=8, candidates=(0.5, 1, 2, 2.5, 5, 10, 20)):
+    """
+    Pick the smallest interval from `candidates` that keeps the
+    number of gridlines across `axis_range` at or below
+    `target_ticks`. Used so the temperature axis gets a sensible
+    number of gridlines whether the visible range is 8 C (a tightly
+    zoomed layer) or 40 C, instead of MetPy's fixed 10 C default
+    locator, which leaves a very narrow zoomed range with only one
+    or two ticks.
+    """
+
+    for interval in candidates:
+
+        if axis_range / interval <= target_ticks:
+            return interval
+
+    return candidates[-1]
 
 
 # =====================================================================
@@ -2391,8 +2412,21 @@ def plot_skewt(
     if dewpoints:
         t_min = min(t_min, min(dewpoints))
 
-    bottom_pressure = p_max + 5
-    top_pressure = p_min - 8
+    # Proportional padding (not a fixed hPa amount) so the chart
+    # reads closer to square rather than a wide banner. MetPy's fixed
+    # 45-degree skew geometry means a tightly-zoomed pressure range
+    # is inherently short-and-wide (see earlier sizing notes) - the
+    # only way to make it read as square is to show more vertical
+    # pressure range relative to the temperature range. These
+    # multipliers were tuned empirically to land around a 0.8-0.9
+    # height/width ratio across both a tight summer-like spread and
+    # a wider winter spread; a minimum floor keeps this sane if the
+    # observed range is unusually small.
+
+    observed_range = max(p_max - p_min, 10.0)
+
+    bottom_pressure = p_max + max(0.5 * observed_range, 12.0)
+    top_pressure = p_min - max(1.0 * observed_range, 25.0)
 
     temp_padding_left = 2.0
     temp_padding_right = 2.0
@@ -2435,13 +2469,13 @@ def plot_skewt(
 
     plt.close(probe_fig)
 
-    skew_width_in = 15.0
-    skew_height_in = max(skew_width_in * natural_ratio, 4.5)
-    skew_width_in = skew_height_in / natural_ratio
+    skew_width_in = 11.0
+    skew_height_in = skew_width_in * natural_ratio
 
-    if skew_width_in > 20.0:
-        skew_width_in = 20.0
-        skew_height_in = skew_width_in * natural_ratio
+    # Safety floor/ceiling in case an unusual data range pushes the
+    # ratio far from the ~0.8-0.9 this is tuned for.
+    skew_height_in = max(min(skew_height_in, 14.0), 6.0)
+    skew_width_in = skew_height_in / natural_ratio
 
     wind_col_in = 1.3
     content_gap_in = 0.15
@@ -2454,13 +2488,12 @@ def plot_skewt(
     gap1_in = 0.15
     icon_row_in = 1.5
     gap2_in = 0.30
-    table_in = 2.7
     footer_in = 0.35
 
     fig_width_in = content_width_in / rect_width_frac
     fig_height_in = (
         header_in + gap1_in + skew_height_in
-        + gap2_in + icon_row_in + gap2_in + table_in + footer_in
+        + gap2_in + icon_row_in + footer_in
     )
 
     fig = plt.figure(figsize=(fig_width_in, fig_height_in))
@@ -2469,7 +2502,7 @@ def plot_skewt(
     skew_height_frac = skew_height_in / fig_height_in
 
     skew_y0 = (
-        footer_in + table_in + gap2_in + icon_row_in + gap2_in
+        footer_in + icon_row_in + gap2_in
     ) / fig_height_in
 
     skew = SkewT(
@@ -2480,6 +2513,31 @@ def plot_skewt(
 
     skew.ax.set_ylim(bottom_pressure, top_pressure)
     skew.ax.set_xlim(left_temperature, right_temperature)
+
+    # Round-number temperature gridlines, spaced dynamically so a
+    # tightly zoomed range (e.g. 8 C wide) still gets a reasonable
+    # number of ticks instead of MetPy's fixed 10 C default locator
+    # leaving only one or two.
+
+    temp_range = right_temperature - left_temperature
+    temp_tick_interval = choose_tick_interval(temp_range)
+
+    xtick_start = math.ceil(left_temperature / temp_tick_interval) * temp_tick_interval
+
+    xticks = []
+    xtick = xtick_start
+
+    while xtick <= right_temperature:
+
+        xticks.append(xtick)
+        xtick += temp_tick_interval
+
+    xtick_decimals = 1 if temp_tick_interval < 1 else 0
+
+    skew.ax.set_xticks(xticks)
+    skew.ax.set_xticklabels(
+        [f"{t:.{xtick_decimals}f}" for t in xticks]
+    )
 
     # Round-number pressure gridlines (every 10 hPa) anchored to
     # KBTV's actual surface pressure.
@@ -2710,7 +2768,7 @@ def plot_skewt(
         ),
     ]
 
-    icon_row_y0 = (footer_in + table_in + gap2_in) / fig_height_in
+    icon_row_y0 = footer_in / fig_height_in
     icon_row_height = icon_row_in / fig_height_in
 
     _draw_diagnostic_cards(
@@ -2720,8 +2778,36 @@ def plot_skewt(
     )
 
     # ==============================================================
-    # STATION TABLE
+    # FOOTER
     # ==============================================================
+
+    fig.text(
+        0.5, footer_in / fig_height_in * 0.4,
+        "Data sources:  NWS API (BTV) \u2022 RR2 \u2022 RRSBTV (IEM)",
+        fontsize=9, color=MUTED_TEXT, ha="center", va="center",
+        style="italic",
+    )
+
+    # ==============================================================
+    # SAVE
+    # ==============================================================
+
+    plt.savefig(OUTPUT_FILE, dpi=175)
+    plt.close(fig)
+
+    print()
+    print(f"Saved Skew-T to: {OUTPUT_FILE}")
+
+
+def plot_station_table(profile):
+    """
+    Render the station observation table as its own image
+    (TABLE_OUTPUT_FILE), separate from the Skew-T. Split out so the
+    dashboard can lay the two out independently - e.g. show the chart
+    prominently and the table as a click-to-expand detail - and so
+    the Skew-T itself isn't forced to reserve vertical space for a
+    table that doesn't need to share its aspect ratio.
+    """
 
     table_rows = []
 
@@ -2765,11 +2851,26 @@ def plot_skewt(
             time_text,
         ])
 
-    table_y0 = footer_in / fig_height_in
-    table_height = table_in / fig_height_in
+    n_rows = len(table_rows)
 
-    table_ax = fig.add_axes([rect_x0, table_y0, rect_width_frac, table_height])
+    # Sized to the content rather than a fixed canvas - a handful of
+    # inches of height per row plus a small margin, so this doesn't
+    # carry the large fixed whitespace a fixed-size figure would.
+
+    fig_width_in = 11.5
+    fig_height_in = 0.55 + 0.42 * (n_rows + 1)
+
+    fig = plt.figure(figsize=(fig_width_in, fig_height_in))
+
+    table_ax = fig.add_axes([0.02, 0.04, 0.96, 0.90])
     table_ax.axis("off")
+
+    table_ax.text(
+        0.0, 1.06, "STATION OBSERVATIONS",
+        transform=table_ax.transAxes,
+        fontsize=12, fontweight="bold", color="black",
+        ha="left", va="bottom",
+    )
 
     col_labels = [
         "Station", "Elev (ft)", "Pressure (hPa)", "Temp (\u00b0C)",
@@ -2805,26 +2906,13 @@ def plot_skewt(
             cell.set_edgecolor(DIVIDER_COLOR)
             cell.get_text().set_color(col_text_colors.get(col, "black"))
 
-    # ==============================================================
-    # FOOTER
-    # ==============================================================
-
-    fig.text(
-        0.5, footer_in / fig_height_in * 0.4,
-        "Data sources:  NWS API (BTV) \u2022 RR2 \u2022 RRSBTV (IEM)",
-        fontsize=9, color=MUTED_TEXT, ha="center", va="center",
-        style="italic",
-    )
-
-    # ==============================================================
-    # SAVE
-    # ==============================================================
-
-    plt.savefig(OUTPUT_FILE, dpi=175)
+    plt.savefig(TABLE_OUTPUT_FILE, dpi=175)
     plt.close(fig)
 
     print()
-    print(f"Saved Skew-T to: {OUTPUT_FILE}")
+    print(f"Saved station table to: {TABLE_OUTPUT_FILE}")
+
+
 
 
 
@@ -3209,6 +3297,8 @@ def main():
         diagnostics,
     )
 
+    plot_station_table(profile)
+
     plot_dashboard_card(
         profile,
         diagnostics,
@@ -3216,9 +3306,11 @@ def main():
 
     upload_to_drive(OUTPUT_FILE, DRIVE_FOLDER_ID, DRIVE_UPLOAD_FILENAME)
 
-    # Not uploading CARD_OUTPUT_FILE yet - add a second
-    # upload_to_drive(CARD_OUTPUT_FILE, ..., ...) call here whenever
-    # you're ready to wire the card into the dashboard.
+    # Not uploading CARD_OUTPUT_FILE/TABLE_OUTPUT_FILE to Drive yet -
+    # add matching upload_to_drive(...) calls here whenever you're
+    # ready, or (better, per the earlier Drive-hotlinking issue) just
+    # let the workflow's git commit step pick up everything in
+    # outputs/ the same way it already does for the other two files.
 
 
 if __name__ == "__main__":
