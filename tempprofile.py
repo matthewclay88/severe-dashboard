@@ -135,6 +135,7 @@ REPO_OUTPUT_DIR = "outputs"
 OUTPUT_FILE = os.path.join(REPO_OUTPUT_DIR, "vt_pseudo_sounding.png")
 CARD_OUTPUT_FILE = os.path.join(REPO_OUTPUT_DIR, "vt_dashboard_card.png")
 TABLE_OUTPUT_FILE = os.path.join(REPO_OUTPUT_DIR, "vt_station_table.png")
+DIAGNOSTICS_OUTPUT_FILE = os.path.join(REPO_OUTPUT_DIR, "vt_diagnostics.png")
 
 # Google Drive destination for the rendered PNG. Reuses the same
 # service account as main.py (GOOGLE_CREDENTIALS). Falls back to
@@ -2479,11 +2480,11 @@ def _draw_diagnostic_cards(fig, rect, cards):
                 transform=band_ax.transAxes,
             )
 
-        icon_h_frac = h * 0.32
+        icon_h_frac = h * 0.30
         icon_h_in = icon_h_frac * fig_h_in
         icon_w_frac = icon_h_in / fig_w_in
 
-        icon_x = cx0 + card_w * 0.06
+        icon_x = cx0 + card_w * 0.07
         icon_y = y0 + (h - icon_h_frac) / 2
 
         icon_ax = fig.add_axes(
@@ -2492,7 +2493,7 @@ def _draw_diagnostic_cards(fig, rect, cards):
 
         icon_fn(icon_ax, icon_color)
 
-        text_x = icon_x + icon_w_frac + card_w * 0.05
+        text_x = icon_x + icon_w_frac + card_w * 0.06
 
         fig.text(
             text_x, y0 + h * 0.80, label,
@@ -2502,7 +2503,7 @@ def _draw_diagnostic_cards(fig, rect, cards):
 
         fig.text(
             text_x, y0 + h * 0.50, value,
-            fontsize=18, color=value_color, ha="left", va="center",
+            fontsize=15, color=value_color, ha="left", va="center",
             fontweight="bold",
         )
 
@@ -2510,7 +2511,7 @@ def _draw_diagnostic_cards(fig, rect, cards):
 
             fig.text(
                 text_x, y0 + h * 0.16, subtext,
-                fontsize=8, color=MUTED_TEXT, ha="left", va="center",
+                fontsize=7.5, color=MUTED_TEXT, ha="left", va="center",
             )
 
 
@@ -2617,42 +2618,21 @@ def plot_skewt(
 
     header_in = 0.7
     gap1_in = 0.12
-    icon_row_in = 1.7
-    gap2_in = 0.25
-    footer_in = 0.32
+    bottom_margin_in = 0.15
 
-    # The diagnostics row (5 icon cards) needs real width for its
-    # labels regardless of how compact the chart itself is - sizing
-    # the whole figure to just fit the chart (as if the diagnostics
-    # row would automatically fit in whatever space that leaves)
-    # is what caused the cards to overlap and clip off the edge.
-    diagnostics_min_width_in = 11.5
+    fig_width_in = content_width_in / rect_width_frac
 
-    fig_width_in = max(
-        content_width_in / rect_width_frac,
-        diagnostics_min_width_in,
-    )
-
-    fig_height_in = (
-        header_in + gap1_in + skew_height_in
-        + gap2_in + icon_row_in + footer_in
-    )
+    fig_height_in = header_in + gap1_in + skew_height_in + bottom_margin_in
 
     fig = plt.figure(figsize=(fig_width_in, fig_height_in))
 
     rect_x0 = (1.0 - rect_width_frac) / 2.0
-
-    # Center the (possibly much narrower) chart+wind block within the
-    # figure width, rather than left-aligning it at rect_x0 - which
-    # would otherwise leave all the extra width as blank space on the
-    # right instead of balanced on both sides.
-    content_frac = content_width_in / fig_width_in
-    content_x0 = (1.0 - content_frac) / 2.0
+    content_x0 = rect_x0
 
     skew_width_frac = skew_width_in / fig_width_in
     skew_height_frac = skew_height_in / fig_height_in
 
-    skew_y0 = (footer_in + icon_row_in + gap2_in) / fig_height_in
+    skew_y0 = bottom_margin_in / fig_height_in
 
     skew = SkewT(
         fig,
@@ -2874,32 +2854,6 @@ def plot_skewt(
         )
 
     # ==============================================================
-    # DIAGNOSTIC ICON CARDS (back on the same figure as the chart)
-    # ==============================================================
-
-    cards = _build_diagnostic_cards(diagnostics)
-
-    icon_row_y0 = footer_in / fig_height_in
-    icon_row_height = icon_row_in / fig_height_in
-
-    _draw_diagnostic_cards(
-        fig,
-        (rect_x0, icon_row_y0, rect_width_frac, icon_row_height),
-        cards,
-    )
-
-    # ==============================================================
-    # FOOTER
-    # ==============================================================
-
-    fig.text(
-        0.5, footer_in / fig_height_in * 0.4,
-        "Data sources:  NWS API (BTV) \u2022 RR2 \u2022 RRSBTV (IEM)",
-        fontsize=9, color=MUTED_TEXT, ha="center", va="center",
-        style="italic",
-    )
-
-    # ==============================================================
     # SAVE
     # ==============================================================
 
@@ -2908,6 +2862,47 @@ def plot_skewt(
 
     print()
     print(f"Saved Skew-T to: {OUTPUT_FILE}")
+
+
+def plot_diagnostics_image(diagnostics):
+    """
+    Render the diagnostic icon-card row as its own image
+    (DIAGNOSTICS_OUTPUT_FILE), separate from the Skew-T. Sized
+    comfortably rather than squeezed to a fraction of the chart's
+    width, since it's no longer sharing a figure with it - the tiny
+    fonts from the squeeze-to-75%-of-chart-width experiment aren't
+    needed here.
+    """
+
+    cards = _build_diagnostic_cards(diagnostics)
+
+    fig_width_in = 9.5
+    icon_row_in = 1.6
+    footer_in = 0.30
+
+    fig = plt.figure(figsize=(fig_width_in, icon_row_in + footer_in))
+
+    icon_row_y0 = footer_in / (icon_row_in + footer_in)
+    icon_row_height = icon_row_in / (icon_row_in + footer_in)
+
+    _draw_diagnostic_cards(
+        fig,
+        (0.02, icon_row_y0, 0.96, icon_row_height),
+        cards,
+    )
+
+    fig.text(
+        0.5, footer_in / (icon_row_in + footer_in) * 0.4,
+        "Data sources:  NWS API (BTV) \u2022 RR2 \u2022 RRSBTV (IEM)",
+        fontsize=8, color=MUTED_TEXT, ha="center", va="center",
+        style="italic",
+    )
+
+    plt.savefig(DIAGNOSTICS_OUTPUT_FILE, dpi=175)
+    plt.close(fig)
+
+    print()
+    print(f"Saved diagnostics cards to: {DIAGNOSTICS_OUTPUT_FILE}")
 
 
 def plot_station_table(profile):
@@ -3409,6 +3404,8 @@ def main():
     )
 
     plot_station_table(profile)
+
+    plot_diagnostics_image(diagnostics)
 
     plot_dashboard_card(
         profile,
