@@ -135,7 +135,6 @@ REPO_OUTPUT_DIR = "outputs"
 OUTPUT_FILE = os.path.join(REPO_OUTPUT_DIR, "vt_pseudo_sounding.png")
 CARD_OUTPUT_FILE = os.path.join(REPO_OUTPUT_DIR, "vt_dashboard_card.png")
 TABLE_OUTPUT_FILE = os.path.join(REPO_OUTPUT_DIR, "vt_station_table.png")
-DIAGNOSTICS_OUTPUT_FILE = os.path.join(REPO_OUTPUT_DIR, "vt_diagnostics.png")
 
 # Google Drive destination for the rendered PNG. Reuses the same
 # service account as main.py (GOOGLE_CREDENTIALS). Falls back to
@@ -2382,6 +2381,62 @@ def _icon_droplet(ax, color):
     )
 
 
+def _build_diagnostic_cards(diagnostics):
+    """
+    Build the (icon_fn, icon_color, label, value, value_color,
+    subtext) tuples for the diagnostic icon-card row, from a
+    diagnostics dict as returned by build_diagnostics().
+    """
+
+    def val(x, suffix="", decimals=1):
+        if x is None:
+            return "\u2014", "None in layer"
+        return f"{x:.{decimals}f}{suffix}", ""
+
+    lapse_val, lapse_sub = val(
+        diagnostics["mean_lapse_rate_C_km"], " \u00b0C/km"
+    )
+
+    shear_val_num = diagnostics["bulk_shear_kt"]
+    shear_val = f"{shear_val_num:.0f} kt" if shear_val_num is not None else "\u2014"
+    shear_depth_ft = STATIONS[SHEAR_TOP_STID] - STATIONS[SHEAR_BASE_STID]
+    shear_sub = f"{STATIONS[SHEAR_BASE_STID]:.0f}\u2013{STATIONS[SHEAR_TOP_STID]:.0f} ft"
+
+    froude_num = diagnostics["froude_number"]
+    froude_val = f"{froude_num:.2f}" if froude_num is not None else "\u2014"
+    froude_sub = diagnostics["flow_regime"]
+
+    freezing_val, freezing_sub = val(diagnostics["freezing_level_ft"], " ft", 0)
+    wbz_val, wbz_sub = val(diagnostics["wet_bulb_zero_ft"], " ft", 0)
+
+    return [
+        (
+            _icon_thermometer, "#d9480f", "MEAN LAPSE RATE",
+            lapse_val, "#d9480f",
+            profile_span_label() if not lapse_sub else lapse_sub,
+        ),
+        (
+            _icon_wind, "#1971c2",
+            f"BULK SHEAR (0\u2013{shear_depth_ft/1000.0:.1f} kft)",
+            shear_val, "#1971c2", shear_sub,
+        ),
+        (
+            _icon_mountain, "#7048e8", "FROUDE NUMBER",
+            froude_val, "#7048e8", froude_sub,
+        ),
+        (
+            _icon_snowflake, "#1c7ed6", "FREEZING LEVEL",
+            freezing_val, "#e8590c" if freezing_val == "\u2014" else "#1c7ed6",
+            freezing_sub,
+        ),
+        (
+            _icon_droplet, "#1c7ed6", "WET-BULB ZERO",
+            wbz_val, "#e8590c" if wbz_val == "\u2014" else "#1c7ed6",
+            wbz_sub,
+        ),
+    ]
+
+
 def _draw_diagnostic_cards(fig, rect, cards):
     """
     Draw a row of icon diagnostic cards spanning `rect` (figure
@@ -2425,11 +2480,11 @@ def _draw_diagnostic_cards(fig, rect, cards):
                 transform=band_ax.transAxes,
             )
 
-        icon_h_frac = h * 0.5
+        icon_h_frac = h * 0.58
         icon_h_in = icon_h_frac * fig_h_in
         icon_w_frac = icon_h_in / fig_w_in
 
-        icon_x = cx0 + card_w * 0.08
+        icon_x = cx0 + card_w * 0.10
         icon_y = y0 + (h - icon_h_frac) / 2
 
         icon_ax = fig.add_axes(
@@ -2438,16 +2493,16 @@ def _draw_diagnostic_cards(fig, rect, cards):
 
         icon_fn(icon_ax, icon_color)
 
-        text_x = icon_x + icon_w_frac + card_w * 0.05
+        text_x = icon_x + icon_w_frac + card_w * 0.08
 
         fig.text(
-            text_x, y0 + h * 0.74, label,
+            text_x, y0 + h * 0.80, label,
             fontsize=9, color=MUTED_TEXT, ha="left", va="center",
             fontweight="bold",
         )
 
         fig.text(
-            text_x, y0 + h * 0.46, value,
+            text_x, y0 + h * 0.50, value,
             fontsize=18, color=value_color, ha="left", va="center",
             fontweight="bold",
         )
@@ -2455,7 +2510,7 @@ def _draw_diagnostic_cards(fig, rect, cards):
         if subtext:
 
             fig.text(
-                text_x, y0 + h * 0.20, subtext,
+                text_x, y0 + h * 0.16, subtext,
                 fontsize=8, color=MUTED_TEXT, ha="left", va="center",
             )
 
@@ -2490,28 +2545,20 @@ def plot_skewt(
     if dewpoints:
         t_min = min(t_min, min(dewpoints))
 
-    # Proportional padding (not a fixed hPa amount) so the chart
-    # reads closer to square rather than a wide banner. MetPy's fixed
-    # 45-degree skew geometry means a tightly-zoomed pressure range
-    # is inherently short-and-wide (see earlier sizing notes) - the
-    # only way to make it read as square is to show more vertical
-    # pressure range relative to the temperature range. These
-    # multipliers were tuned empirically to land around a 0.8-0.9
-    # height/width ratio across both a tight summer-like spread and
-    # a wider winter spread; a minimum floor keeps this sane if the
-    # observed range is unusually small.
+    # Modest, mostly-fixed pressure padding - not tuned for squareness
+    # anymore. A fixed 850 mb ceiling trims how much sky gets shown
+    # above the summit station instead of the proportional padding
+    # used for the (since-reverted) square layout; a small safety
+    # margin keeps this sane if a station's pressure ever ends up
+    # unusually close to that ceiling.
 
-    observed_range = max(p_max - p_min, 10.0)
-
-    bottom_pressure = p_max + max(0.5 * observed_range, 12.0)
-    top_pressure = p_min - max(1.0 * observed_range, 25.0)
+    bottom_pressure = p_max + 15.0
+    top_pressure = min(850.0, p_min - 15.0)
 
     # Temperature-axis limits, corrected for the skew transform's
     # horizontal shift with height (see compute_skew_corrected_xlim)
-    # rather than just the raw temperature range - otherwise, once
-    # the chart spans enough pressure range to look square, the
-    # higher-elevation points render shifted noticeably rightward and
-    # can clip past the edge of the frame.
+    # rather than just the raw temperature range - a real effect even
+    # at this more modest pressure range, just smaller in magnitude.
 
     skew_points = []
 
@@ -2555,34 +2602,39 @@ def plot_skewt(
 
     plt.close(probe_fig)
 
-    skew_width_in = 11.0
+    skew_width_in = 6.5
     skew_height_in = skew_width_in * natural_ratio
 
-    # Safety floor/ceiling in case an unusual data range pushes the
-    # ratio far from the ~0.8-0.9 this is tuned for.
-    skew_height_in = max(min(skew_height_in, 14.0), 6.0)
+    # Safety floor/ceiling so an unusual data range can't blow this
+    # back up to the earlier "takes up half the dashboard" size.
+    skew_height_in = max(min(skew_height_in, 8.0), 3.5)
     skew_width_in = skew_height_in / natural_ratio
 
-    wind_col_in = 1.3
+    wind_col_in = 0.9
     content_gap_in = 0.15
     content_width_in = skew_width_in + content_gap_in + wind_col_in
 
     rect_width_frac = 0.92
     rect_x0 = (1.0 - rect_width_frac) / 2.0
 
-    header_in = 1.0
-    gap1_in = 0.15
-    bottom_margin_in = 0.15
+    header_in = 0.7
+    gap1_in = 0.12
+    icon_row_in = 1.7
+    gap2_in = 0.25
+    footer_in = 0.32
 
     fig_width_in = content_width_in / rect_width_frac
-    fig_height_in = header_in + gap1_in + skew_height_in + bottom_margin_in
+    fig_height_in = (
+        header_in + gap1_in + skew_height_in
+        + gap2_in + icon_row_in + footer_in
+    )
 
     fig = plt.figure(figsize=(fig_width_in, fig_height_in))
 
     skew_width_frac = skew_width_in / fig_width_in
     skew_height_frac = skew_height_in / fig_height_in
 
-    skew_y0 = bottom_margin_in / fig_height_in
+    skew_y0 = (footer_in + icon_row_in + gap2_in) / fig_height_in
 
     skew = SkewT(
         fig,
@@ -2770,16 +2822,16 @@ def plot_skewt(
     # ==============================================================
 
     fig.text(
-        0.03, (fig_height_in - 0.32) / fig_height_in,
+        0.03, (fig_height_in - 0.28) / fig_height_in,
         "MOUNT MANSFIELD OBSERVED SLOPE PROFILE",
-        fontsize=19, fontweight="bold", color="black",
+        fontsize=13, fontweight="bold", color="black",
         ha="left", va="top",
     )
 
     fig.text(
-        0.03, (fig_height_in - 0.62) / fig_height_in,
+        0.03, (fig_height_in - 0.50) / fig_height_in,
         profile_span_label(),
-        fontsize=11, color=MUTED_TEXT,
+        fontsize=9, color=MUTED_TEXT,
         ha="left", va="top",
     )
 
@@ -2797,11 +2849,37 @@ def plot_skewt(
         newest = max(latest_times)
 
         fig.text(
-            1.0 - rect_x0, (fig_height_in - 0.32) / fig_height_in,
+            1.0 - rect_x0, (fig_height_in - 0.28) / fig_height_in,
             newest.strftime("%d %b %Y %H:%M UTC"),
-            fontsize=15, fontweight="bold", color="black",
+            fontsize=11, fontweight="bold", color="black",
             ha="right", va="top",
         )
+
+    # ==============================================================
+    # DIAGNOSTIC ICON CARDS (back on the same figure as the chart)
+    # ==============================================================
+
+    cards = _build_diagnostic_cards(diagnostics)
+
+    icon_row_y0 = footer_in / fig_height_in
+    icon_row_height = icon_row_in / fig_height_in
+
+    _draw_diagnostic_cards(
+        fig,
+        (rect_x0, icon_row_y0, rect_width_frac, icon_row_height),
+        cards,
+    )
+
+    # ==============================================================
+    # FOOTER
+    # ==============================================================
+
+    fig.text(
+        0.5, footer_in / fig_height_in * 0.4,
+        "Data sources:  NWS API (BTV) \u2022 RR2 \u2022 RRSBTV (IEM)",
+        fontsize=9, color=MUTED_TEXT, ha="center", va="center",
+        style="italic",
+    )
 
     # ==============================================================
     # SAVE
@@ -2812,90 +2890,6 @@ def plot_skewt(
 
     print()
     print(f"Saved Skew-T to: {OUTPUT_FILE}")
-
-
-def plot_diagnostics_image(diagnostics):
-    """
-    Render the diagnostic icon-card row as its own image
-    (DIAGNOSTICS_OUTPUT_FILE), separate from the Skew-T, sized to its
-    content rather than sharing the chart's aspect ratio.
-    """
-
-    def val(x, suffix="", decimals=1):
-        if x is None:
-            return "\u2014", "None in layer"
-        return f"{x:.{decimals}f}{suffix}", ""
-
-    lapse_val, lapse_sub = val(
-        diagnostics["mean_lapse_rate_C_km"], " \u00b0C/km"
-    )
-
-    shear_val_num = diagnostics["bulk_shear_kt"]
-    shear_val = f"{shear_val_num:.0f} kt" if shear_val_num is not None else "\u2014"
-    shear_depth_ft = STATIONS[SHEAR_TOP_STID] - STATIONS[SHEAR_BASE_STID]
-    shear_sub = f"{STATIONS[SHEAR_BASE_STID]:.0f}\u2013{STATIONS[SHEAR_TOP_STID]:.0f} ft"
-
-    froude_num = diagnostics["froude_number"]
-    froude_val = f"{froude_num:.2f}" if froude_num is not None else "\u2014"
-    froude_sub = diagnostics["flow_regime"]
-
-    freezing_val, freezing_sub = val(diagnostics["freezing_level_ft"], " ft", 0)
-    wbz_val, wbz_sub = val(diagnostics["wet_bulb_zero_ft"], " ft", 0)
-
-    cards = [
-        (
-            _icon_thermometer, "#d9480f", "MEAN LAPSE RATE",
-            lapse_val, "#d9480f",
-            profile_span_label() if not lapse_sub else lapse_sub,
-        ),
-        (
-            _icon_wind, "#1971c2",
-            f"BULK SHEAR (0\u2013{shear_depth_ft/1000.0:.1f} kft)",
-            shear_val, "#1971c2", shear_sub,
-        ),
-        (
-            _icon_mountain, "#7048e8", "FROUDE NUMBER",
-            froude_val, "#7048e8", froude_sub,
-        ),
-        (
-            _icon_snowflake, "#1c7ed6", "FREEZING LEVEL",
-            freezing_val, "#e8590c" if freezing_val == "\u2014" else "#1c7ed6",
-            freezing_sub,
-        ),
-        (
-            _icon_droplet, "#1c7ed6", "WET-BULB ZERO",
-            wbz_val, "#e8590c" if wbz_val == "\u2014" else "#1c7ed6",
-            wbz_sub,
-        ),
-    ]
-
-    fig_width_in = 11.5
-    fig_height_in = 2.0
-    footer_in = 0.35
-
-    fig = plt.figure(figsize=(fig_width_in, fig_height_in))
-
-    icon_row_y0 = footer_in / fig_height_in
-    icon_row_height = (fig_height_in - footer_in - 0.05) / fig_height_in
-
-    _draw_diagnostic_cards(
-        fig,
-        (0.01, icon_row_y0, 0.98, icon_row_height),
-        cards,
-    )
-
-    fig.text(
-        0.5, footer_in / fig_height_in * 0.4,
-        "Data sources:  NWS API (BTV) \u2022 RR2 \u2022 RRSBTV (IEM)",
-        fontsize=9, color=MUTED_TEXT, ha="center", va="center",
-        style="italic",
-    )
-
-    plt.savefig(DIAGNOSTICS_OUTPUT_FILE, dpi=175)
-    plt.close(fig)
-
-    print()
-    print(f"Saved diagnostics cards to: {DIAGNOSTICS_OUTPUT_FILE}")
 
 
 def plot_station_table(profile):
@@ -3397,8 +3391,6 @@ def main():
     )
 
     plot_station_table(profile)
-
-    plot_diagnostics_image(diagnostics)
 
     plot_dashboard_card(
         profile,
