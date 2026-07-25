@@ -36,4 +36,7 @@ jobs:
           GLWU_DRIVE_FOLDER_ID: ${{ secrets.GLWU_DRIVE_FOLDER_ID }}
         run: python main.py
       - name: Run temperature profile script
+        env:
+          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+          GLWU_DRIVE_FOLDER_ID: ${{ secrets.GLWU_DRIVE_FOLDER_ID }}
         run: python tempprofile.py
