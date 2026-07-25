@@ -2615,7 +2615,6 @@ def plot_skewt(
     content_width_in = skew_width_in + content_gap_in + wind_col_in
 
     rect_width_frac = 0.92
-    rect_x0 = (1.0 - rect_width_frac) / 2.0
 
     header_in = 0.7
     gap1_in = 0.12
@@ -2623,13 +2622,33 @@ def plot_skewt(
     gap2_in = 0.25
     footer_in = 0.32
 
-    fig_width_in = content_width_in / rect_width_frac
+    # The diagnostics row (5 icon cards) needs real width for its
+    # labels regardless of how compact the chart itself is - sizing
+    # the whole figure to just fit the chart (as if the diagnostics
+    # row would automatically fit in whatever space that leaves)
+    # is what caused the cards to overlap and clip off the edge.
+    diagnostics_min_width_in = 11.5
+
+    fig_width_in = max(
+        content_width_in / rect_width_frac,
+        diagnostics_min_width_in,
+    )
+
     fig_height_in = (
         header_in + gap1_in + skew_height_in
         + gap2_in + icon_row_in + footer_in
     )
 
     fig = plt.figure(figsize=(fig_width_in, fig_height_in))
+
+    rect_x0 = (1.0 - rect_width_frac) / 2.0
+
+    # Center the (possibly much narrower) chart+wind block within the
+    # figure width, rather than left-aligning it at rect_x0 - which
+    # would otherwise leave all the extra width as blank space on the
+    # right instead of balanced on both sides.
+    content_frac = content_width_in / fig_width_in
+    content_x0 = (1.0 - content_frac) / 2.0
 
     skew_width_frac = skew_width_in / fig_width_in
     skew_height_frac = skew_height_in / fig_height_in
@@ -2639,7 +2658,7 @@ def plot_skewt(
     skew = SkewT(
         fig,
         rotation=45,
-        rect=(rect_x0, skew_y0, skew_width_frac, skew_height_frac),
+        rect=(content_x0, skew_y0, skew_width_frac, skew_height_frac),
     )
 
     skew.ax.set_ylim(bottom_pressure, top_pressure)
@@ -2784,7 +2803,7 @@ def plot_skewt(
     # WIND COLUMN (separate axes, plain upright barbs)
     # ==============================================================
 
-    wind_x0 = rect_x0 + skew_width_frac + content_gap_in / fig_width_in
+    wind_x0 = content_x0 + skew_width_frac + content_gap_in / fig_width_in
     wind_width_frac = wind_col_in / fig_width_in
 
     wind_ax = fig.add_axes(
