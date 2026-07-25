@@ -1579,6 +1579,30 @@ def max_inversion(profile):
     return best
 
 
+def inversion_pressure_bands(profile):
+    """
+    Every layer (not just the single largest) where temperature
+    increases with height, as a list of (pressure_low, pressure_high)
+    tuples ready for axhspan shading on the Skew-T. A profile can have
+    more than one inverted layer (e.g. a shallow surface inversion
+    plus a separate one aloft), unlike max_inversion() which only
+    reports the strongest.
+    """
+
+    bands = []
+
+    for lower, upper in zip(profile, profile[1:]):
+
+        if upper["temperature_C"] > lower["temperature_C"]:
+
+            p1 = lower["pressure_hPa"]
+            p2 = upper["pressure_hPa"]
+
+            bands.append((min(p1, p2), max(p1, p2)))
+
+    return bands
+
+
 def attach_derived_fields(profile):
     """
     Compute per-station wet-bulb temperature and relative humidity
@@ -2707,6 +2731,17 @@ def plot_skewt(
     skew.plot_dry_adiabats(alpha=0.20)
     skew.plot_moist_adiabats(alpha=0.15)
     skew.plot_mixing_lines(alpha=0.12)
+
+    # Subtle red shading over any layer where temperature increases
+    # with height (an inversion) - every such layer, not just the
+    # single strongest one, since a profile can have more than one.
+
+    for p_low, p_high in inversion_pressure_bands(profile):
+
+        skew.ax.axhspan(
+            p_low, p_high,
+            color="red", alpha=0.08, zorder=1, linewidth=0,
+        )
 
     # ==============================================================
     # TEMPERATURE / DEWPOINT / WET-BULB
