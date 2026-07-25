@@ -37,6 +37,7 @@ Requirements:
     pip install requests numpy matplotlib metpy
 """
 
+import os
 import re
 from datetime import datetime, timedelta, timezone
 
@@ -53,6 +54,11 @@ from matplotlib.patches import Circle, Polygon, FancyBboxPatch
 import metpy.calc as mpcalc
 from metpy.units import units
 from metpy.plots import SkewT
+
+import json
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload
 
 
 # =====================================================================
@@ -114,6 +120,19 @@ NWS_OB_LIMIT = 20
 RRS_LOOKBACK_HOURS = 6
 
 OUTPUT_FILE = "vt_pseudo_sounding.png"
+
+# Google Drive destination for the rendered PNG. Reuses the same
+# service account as main.py (GOOGLE_CREDENTIALS). Falls back to
+# GLWU_DRIVE_FOLDER_ID if a dedicated MANSFIELD_DRIVE_FOLDER_ID isn't
+# set, so this works whether you want it in the same Drive folder as
+# main.py's images or a separate one.
+
+DRIVE_FOLDER_ID = (
+    os.environ.get("MANSFIELD_DRIVE_FOLDER_ID")
+    or os.environ.get("GLWU_DRIVE_FOLDER_ID")
+)
+
+DRIVE_UPLOAD_FILENAME = "vt_pseudo_sounding.png"
 
 # Physical constants used by the diagnostics module below.
 RD = 287.05      # J/(kg*K), dry air gas constant
@@ -2798,6 +2817,97 @@ def plot_skewt(
 
 
 # =====================================================================
+# 13B. GOOGLE DRIVE UPLOAD
+# =====================================================================
+
+def get_drive_service():
+    """
+    Build an authenticated Drive API client from the GOOGLE_CREDENTIALS
+    secret (a service account JSON key, same as main.py uses).
+    """
+
+    creds_raw = os.environ.get("GOOGLE_CREDENTIALS")
+
+    if not creds_raw:
+
+        raise RuntimeError(
+            "GOOGLE_CREDENTIALS is not set - cannot authenticate to "
+            "Google Drive."
+        )
+
+    creds_dict = json.loads(creds_raw)
+
+    credentials = service_account.Credentials.from_service_account_info(
+        creds_dict,
+        scopes=["https://www.googleapis.com/auth/drive"],
+    )
+
+    return build("drive", "v3", credentials=credentials)
+
+
+def upload_to_drive(filepath, folder_id, filename=None):
+    """
+    Upload filepath to the given Drive folder, updating an existing
+    file of the same name in place if one is already there instead of
+    creating a new copy on every scheduled run.
+    """
+
+    if not folder_id:
+
+        print(
+            "WARNING: no Drive folder ID configured "
+            "(MANSFIELD_DRIVE_FOLDER_ID / GLWU_DRIVE_FOLDER_ID) - "
+            "skipping upload."
+        )
+
+        return
+
+    filename = filename or os.path.basename(filepath)
+
+    service = get_drive_service()
+
+    query = (
+        f"name = '{filename}' "
+        f"and '{folder_id}' in parents "
+        f"and trashed = false"
+    )
+
+    existing = service.files().list(
+        q=query,
+        fields="files(id, name)",
+        spaces="drive",
+    ).execute().get("files", [])
+
+    media = MediaFileUpload(filepath, mimetype="image/png")
+
+    if existing:
+
+        file_id = existing[0]["id"]
+
+        service.files().update(
+            fileId=file_id,
+            media_body=media,
+        ).execute()
+
+        print(f"Updated existing Drive file '{filename}' ({file_id})")
+
+    else:
+
+        metadata = {
+            "name": filename,
+            "parents": [folder_id],
+        }
+
+        created = service.files().create(
+            body=metadata,
+            media_body=media,
+            fields="id",
+        ).execute()
+
+        print(f"Uploaded new Drive file '{filename}' ({created['id']})")
+
+
+# =====================================================================
 # 13. MAIN
 # =====================================================================
 
@@ -2848,6 +2958,8 @@ def main():
         v,
         diagnostics,
     )
+
+    upload_to_drive(OUTPUT_FILE, DRIVE_FOLDER_ID, DRIVE_UPLOAD_FILENAME)
 
 
 if __name__ == "__main__":
