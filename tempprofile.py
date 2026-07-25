@@ -2629,12 +2629,12 @@ def plot_skewt(
 
     plt.close(probe_fig)
 
-    skew_width_in = 6.5
+    skew_width_in = 5.5
     skew_height_in = skew_width_in * natural_ratio
 
     # Safety floor/ceiling so an unusual data range can't blow this
     # back up to the earlier "takes up half the dashboard" size.
-    skew_height_in = max(min(skew_height_in, 8.0), 3.5)
+    skew_height_in = max(min(skew_height_in, 6.0), 3.2)
     skew_width_in = skew_height_in / natural_ratio
 
     wind_col_in = 0.9
