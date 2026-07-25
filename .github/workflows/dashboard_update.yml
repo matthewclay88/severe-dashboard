@@ -35,3 +35,5 @@ jobs:
           NCEI_CDO_TOKEN: ${{ secrets.NCEI_CDO_TOKEN }}
           GLWU_DRIVE_FOLDER_ID: ${{ secrets.GLWU_DRIVE_FOLDER_ID }}
         run: python main.py
+      - name: Run temperature profile script
+        run: python tempprofile.py
