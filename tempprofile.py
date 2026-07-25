@@ -2399,7 +2399,6 @@ def _build_diagnostic_cards(diagnostics):
 
     shear_val_num = diagnostics["bulk_shear_kt"]
     shear_val = f"{shear_val_num:.0f} kt" if shear_val_num is not None else "\u2014"
-    shear_depth_ft = STATIONS[SHEAR_TOP_STID] - STATIONS[SHEAR_BASE_STID]
     shear_sub = f"{STATIONS[SHEAR_BASE_STID]:.0f}\u2013{STATIONS[SHEAR_TOP_STID]:.0f} ft"
 
     froude_num = diagnostics["froude_number"]
@@ -2417,7 +2416,7 @@ def _build_diagnostic_cards(diagnostics):
         ),
         (
             _icon_wind, "#1971c2",
-            f"BULK SHEAR (0\u2013{shear_depth_ft/1000.0:.1f} kft)",
+            "BULK SHEAR",
             shear_val, "#1971c2", shear_sub,
         ),
         (
@@ -2480,11 +2479,11 @@ def _draw_diagnostic_cards(fig, rect, cards):
                 transform=band_ax.transAxes,
             )
 
-        icon_h_frac = h * 0.58
+        icon_h_frac = h * 0.32
         icon_h_in = icon_h_frac * fig_h_in
         icon_w_frac = icon_h_in / fig_w_in
 
-        icon_x = cx0 + card_w * 0.10
+        icon_x = cx0 + card_w * 0.06
         icon_y = y0 + (h - icon_h_frac) / 2
 
         icon_ax = fig.add_axes(
@@ -2493,7 +2492,7 @@ def _draw_diagnostic_cards(fig, rect, cards):
 
         icon_fn(icon_ax, icon_color)
 
-        text_x = icon_x + icon_w_frac + card_w * 0.08
+        text_x = icon_x + icon_w_frac + card_w * 0.05
 
         fig.text(
             text_x, y0 + h * 0.80, label,
