@@ -2629,12 +2629,12 @@ def plot_skewt(
 
     plt.close(probe_fig)
 
-    skew_width_in = 5.5
+    skew_width_in = 4.6
     skew_height_in = skew_width_in * natural_ratio
 
     # Safety floor/ceiling so an unusual data range can't blow this
     # back up to the earlier "takes up half the dashboard" size.
-    skew_height_in = max(min(skew_height_in, 6.0), 3.2)
+    skew_height_in = max(min(skew_height_in, 5.0), 2.8)
     skew_width_in = skew_height_in / natural_ratio
 
     wind_col_in = 0.9
@@ -2643,8 +2643,8 @@ def plot_skewt(
 
     rect_width_frac = 0.92
 
-    header_in = 0.7
-    gap1_in = 0.12
+    header_in = 0.55
+    gap1_in = 0.08
     bottom_margin_in = 0.52
 
     fig_width_in = content_width_in / rect_width_frac
@@ -2858,14 +2858,14 @@ def plot_skewt(
     # ==============================================================
 
     fig.text(
-        0.03, (fig_height_in - 0.28) / fig_height_in,
+        0.03, (fig_height_in - 0.22) / fig_height_in,
         "MOUNT MANSFIELD OBSERVED SLOPE PROFILE",
         fontsize=13, fontweight="bold", color="black",
         ha="left", va="top",
     )
 
     fig.text(
-        0.03, (fig_height_in - 0.50) / fig_height_in,
+        0.03, (fig_height_in - 0.40) / fig_height_in,
         profile_span_label(),
         fontsize=9, color=MUTED_TEXT,
         ha="left", va="top",
@@ -2885,7 +2885,7 @@ def plot_skewt(
         newest = max(latest_times)
 
         fig.text(
-            1.0 - rect_x0, (fig_height_in - 0.28) / fig_height_in,
+            1.0 - rect_x0, (fig_height_in - 0.22) / fig_height_in,
             newest.strftime("%d %b %Y %H:%M UTC"),
             fontsize=11, fontweight="bold", color="black",
             ha="right", va="top",
