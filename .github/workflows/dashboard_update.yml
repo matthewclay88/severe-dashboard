@@ -44,7 +44,23 @@ jobs:
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
+
           git add outputs/
           git commit -m "Update Mansfield sounding outputs [skip ci]" || echo "No changes to commit"
-          git pull --rebase
-          git push
+
+          # Generated PNGs can't be 3-way merged, so instead of
+          # rebasing (which conflicts whenever two runs touch the
+          # same binary file), just replay our commit on top of
+          # whatever is currently on origin/main each attempt - our
+          # freshly-generated output always wins.
+          for i in 1 2 3 4 5; do
+            git fetch origin main
+            git reset --soft origin/main
+            git commit -m "Update Mansfield sounding outputs [skip ci]" || echo "Nothing new to commit"
+            if git push origin HEAD:main; then
+              echo "Pushed successfully"
+              break
+            fi
+            echo "Push failed, retrying ($i)..."
+            sleep $(( (RANDOM % 10) + 5 ))
+          done
