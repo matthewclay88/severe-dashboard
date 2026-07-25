@@ -36,23 +36,17 @@ jobs:
           GLWU_DRIVE_FOLDER_ID: ${{ secrets.GLWU_DRIVE_FOLDER_ID }}
         run: python main.py
       - name: Run temperature profile script
-        env:
-          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
-          GLWU_DRIVE_FOLDER_ID: ${{ secrets.GLWU_DRIVE_FOLDER_ID }}
         run: python tempprofile.py
+
+      - name: Run snow depth script
+        run: python mansfield_snow_depth.py
+
       - name: Commit dashboard outputs
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
-
           git add outputs/
           git commit -m "Update Mansfield sounding outputs [skip ci]" || echo "No changes to commit"
-
-          # Generated PNGs can't be 3-way merged, so instead of
-          # rebasing (which conflicts whenever two runs touch the
-          # same binary file), just replay our commit on top of
-          # whatever is currently on origin/main each attempt - our
-          # freshly-generated output always wins.
           for i in 1 2 3 4 5; do
             git fetch origin main
             git reset --soft origin/main
