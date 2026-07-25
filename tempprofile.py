@@ -60,6 +60,7 @@ matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle, Polygon, FancyBboxPatch
+from matplotlib.ticker import FixedLocator, FixedFormatter, NullLocator, NullFormatter
 
 import metpy.calc as mpcalc
 from metpy.units import units
@@ -134,6 +135,7 @@ REPO_OUTPUT_DIR = "outputs"
 OUTPUT_FILE = os.path.join(REPO_OUTPUT_DIR, "vt_pseudo_sounding.png")
 CARD_OUTPUT_FILE = os.path.join(REPO_OUTPUT_DIR, "vt_dashboard_card.png")
 TABLE_OUTPUT_FILE = os.path.join(REPO_OUTPUT_DIR, "vt_station_table.png")
+DIAGNOSTICS_OUTPUT_FILE = os.path.join(REPO_OUTPUT_DIR, "vt_diagnostics.png")
 
 # Google Drive destination for the rendered PNG. Reuses the same
 # service account as main.py (GOOGLE_CREDENTIALS). Falls back to
@@ -261,6 +263,82 @@ def choose_tick_interval(axis_range, target_ticks=8, candidates=(0.5, 1, 2, 2.5,
             return interval
 
     return candidates[-1]
+
+
+def compute_skew_corrected_xlim(bottom_pressure, top_pressure, points, min_width=8.0, pad=2.0):
+    """
+    Determine temperature-axis limits that keep every (temperature,
+    pressure) point in `points` visible, accounting for MetPy's
+    45-degree skew transform - not just each point's raw temperature.
+
+    The skew shifts a point's rendered screen position to the right
+    as pressure decreases (higher elevation), by an amount that
+    depends on how much pressure range the chart spans. Sizing xlim
+    from raw min/max temperature alone (as if the axes were
+    unskewed) under-accounts for that shift once a chart shows more
+    than a small pressure range - a point can have an unremarkable
+    raw temperature yet still render very close to, or past, the
+    edge of the visible box because of its altitude. This showed up
+    directly: widening the pressure range to make the chart read
+    more square (see the padding notes above) also increased how far
+    the top of the profile shifts right, and pushed it toward the
+    edge of the frame.
+
+    Approach: render the given points against a deliberately
+    oversized, arbitrary xlim so nothing clips, measure where they
+    actually land in axes-fraction terms, and back-convert that into
+    the equivalent "effective x position" each point would have
+    (skew shift included). Because the skew transform is affine, that
+    effective position doesn't depend on which provisional xlim was
+    used to measure it - only the final chosen xlim, which is set
+    from the resulting min/max plus padding.
+    """
+
+    if not points:
+        return -4.0, 4.0
+
+    raw_temps = [p[0] for p in points]
+    raw_span = max(max(raw_temps) - min(raw_temps), 10.0)
+
+    provisional_half_width = raw_span * 3 + 40.0
+    provisional_left = min(raw_temps) - provisional_half_width
+    provisional_right = max(raw_temps) + provisional_half_width
+
+    probe_fig = plt.figure(figsize=(10, 10))
+
+    probe_skew = SkewT(
+        probe_fig, rotation=45, rect=(0.1, 0.1, 0.8, 0.8)
+    )
+
+    probe_skew.ax.set_ylim(bottom_pressure, top_pressure)
+    probe_skew.ax.set_xlim(provisional_left, provisional_right)
+
+    probe_fig.canvas.draw()
+
+    bbox = probe_skew.ax.get_window_extent()
+
+    shifted_x_values = []
+
+    for temp_value, pressure_value in points:
+
+        px, _py = probe_skew.ax.transData.transform((temp_value, pressure_value))
+        frac = (px - bbox.x0) / (bbox.x1 - bbox.x0)
+
+        shifted_x = provisional_left + frac * (provisional_right - provisional_left)
+        shifted_x_values.append(shifted_x)
+
+    plt.close(probe_fig)
+
+    final_left = min(shifted_x_values) - pad
+    final_right = max(shifted_x_values) + pad
+
+    if final_right - final_left < min_width:
+
+        midpoint = (final_left + final_right) / 2.0
+        final_left = midpoint - min_width / 2.0
+        final_right = midpoint + min_width / 2.0
+
+    return final_left, final_right
 
 
 # =====================================================================
@@ -2428,20 +2506,28 @@ def plot_skewt(
     bottom_pressure = p_max + max(0.5 * observed_range, 12.0)
     top_pressure = p_min - max(1.0 * observed_range, 25.0)
 
-    temp_padding_left = 2.0
-    temp_padding_right = 2.0
+    # Temperature-axis limits, corrected for the skew transform's
+    # horizontal shift with height (see compute_skew_corrected_xlim)
+    # rather than just the raw temperature range - otherwise, once
+    # the chart spans enough pressure range to look square, the
+    # higher-elevation points render shifted noticeably rightward and
+    # can clip past the edge of the frame.
 
-    left_temperature = t_min - temp_padding_left
-    right_temperature = t_max + temp_padding_right
+    skew_points = []
 
-    minimum_temp_width = 8.0
-    current_width = right_temperature - left_temperature
+    for station in profile:
 
-    if current_width < minimum_temp_width:
+        skew_points.append((station["temperature_C"], station["pressure_hPa"]))
 
-        midpoint = (t_max + t_min) / 2.0
-        left_temperature = midpoint - minimum_temp_width / 2.0
-        right_temperature = midpoint + minimum_temp_width / 2.0
+        if station.get("dewpoint_C") is not None:
+            skew_points.append((station["dewpoint_C"], station["pressure_hPa"]))
+
+        if station.get("wetbulb_C") is not None:
+            skew_points.append((station["wetbulb_C"], station["pressure_hPa"]))
+
+    left_temperature, right_temperature = compute_skew_corrected_xlim(
+        bottom_pressure, top_pressure, skew_points,
+    )
 
     # ==============================================================
     # FIGURE SIZING
@@ -2486,24 +2572,17 @@ def plot_skewt(
 
     header_in = 1.0
     gap1_in = 0.15
-    icon_row_in = 1.5
-    gap2_in = 0.30
-    footer_in = 0.35
+    bottom_margin_in = 0.15
 
     fig_width_in = content_width_in / rect_width_frac
-    fig_height_in = (
-        header_in + gap1_in + skew_height_in
-        + gap2_in + icon_row_in + footer_in
-    )
+    fig_height_in = header_in + gap1_in + skew_height_in + bottom_margin_in
 
     fig = plt.figure(figsize=(fig_width_in, fig_height_in))
 
     skew_width_frac = skew_width_in / fig_width_in
     skew_height_frac = skew_height_in / fig_height_in
 
-    skew_y0 = (
-        footer_in + icon_row_in + gap2_in
-    ) / fig_height_in
+    skew_y0 = bottom_margin_in / fig_height_in
 
     skew = SkewT(
         fig,
@@ -2534,9 +2613,9 @@ def plot_skewt(
 
     xtick_decimals = 1 if temp_tick_interval < 1 else 0
 
-    skew.ax.set_xticks(xticks)
-    skew.ax.set_xticklabels(
-        [f"{t:.{xtick_decimals}f}" for t in xticks]
+    skew.ax.xaxis.set_major_locator(FixedLocator(xticks))
+    skew.ax.xaxis.set_major_formatter(
+        FixedFormatter([f"{t:.{xtick_decimals}f}" for t in xticks])
     )
 
     # Round-number pressure gridlines (every 10 hPa) anchored to
@@ -2558,8 +2637,18 @@ def plot_skewt(
 
         tick -= 10
 
-    skew.ax.set_yticks(yticks)
-    skew.ax.set_yticklabels([f"{t:.0f}" for t in yticks])
+    # FixedLocator/FixedFormatter (not plain set_yticks/set_yticklabels)
+    # so these persist through any later redraw - a log-scale y-axis
+    # otherwise falls back to matplotlib's default scientific-notation
+    # formatter (the "9 x 10^2" style labels), which is what was
+    # actually showing up instead of our intended round-number labels.
+    # Minor ticks/labels are explicitly disabled for the same reason -
+    # the log scale enables them by default with their own formatter.
+
+    skew.ax.yaxis.set_major_locator(FixedLocator(yticks))
+    skew.ax.yaxis.set_major_formatter(FixedFormatter([f"{t:.0f}" for t in yticks]))
+    skew.ax.yaxis.set_minor_locator(NullLocator())
+    skew.ax.yaxis.set_minor_formatter(NullFormatter())
 
     # ==============================================================
     # SKEW-T BACKGROUND
@@ -2652,15 +2741,13 @@ def plot_skewt(
     )
 
     wind_ax.set_ylim(bottom_pressure, top_pressure)
-    wind_ax.set_yscale(skew.ax.get_yscale())
     wind_ax.set_xlim(-1, 1)
     wind_ax.set_xticks([])
-    wind_ax.set_yticklabels([])
 
     for spine in wind_ax.spines.values():
         spine.set_visible(False)
 
-    wind_ax.tick_params(left=False)
+    wind_ax.tick_params(left=False, labelleft=False)
 
     wind_ax.text(
         0.0, 1.02, "WIND",
@@ -2717,8 +2804,22 @@ def plot_skewt(
         )
 
     # ==============================================================
-    # DIAGNOSTIC ICON CARDS
+    # SAVE
     # ==============================================================
+
+    plt.savefig(OUTPUT_FILE, dpi=175)
+    plt.close(fig)
+
+    print()
+    print(f"Saved Skew-T to: {OUTPUT_FILE}")
+
+
+def plot_diagnostics_image(diagnostics):
+    """
+    Render the diagnostic icon-card row as its own image
+    (DIAGNOSTICS_OUTPUT_FILE), separate from the Skew-T, sized to its
+    content rather than sharing the chart's aspect ratio.
+    """
 
     def val(x, suffix="", decimals=1):
         if x is None:
@@ -2768,18 +2869,20 @@ def plot_skewt(
         ),
     ]
 
+    fig_width_in = 11.5
+    fig_height_in = 2.0
+    footer_in = 0.35
+
+    fig = plt.figure(figsize=(fig_width_in, fig_height_in))
+
     icon_row_y0 = footer_in / fig_height_in
-    icon_row_height = icon_row_in / fig_height_in
+    icon_row_height = (fig_height_in - footer_in - 0.05) / fig_height_in
 
     _draw_diagnostic_cards(
         fig,
-        (rect_x0, icon_row_y0, rect_width_frac, icon_row_height),
+        (0.01, icon_row_y0, 0.98, icon_row_height),
         cards,
     )
-
-    # ==============================================================
-    # FOOTER
-    # ==============================================================
 
     fig.text(
         0.5, footer_in / fig_height_in * 0.4,
@@ -2788,15 +2891,11 @@ def plot_skewt(
         style="italic",
     )
 
-    # ==============================================================
-    # SAVE
-    # ==============================================================
-
-    plt.savefig(OUTPUT_FILE, dpi=175)
+    plt.savefig(DIAGNOSTICS_OUTPUT_FILE, dpi=175)
     plt.close(fig)
 
     print()
-    print(f"Saved Skew-T to: {OUTPUT_FILE}")
+    print(f"Saved diagnostics cards to: {DIAGNOSTICS_OUTPUT_FILE}")
 
 
 def plot_station_table(profile):
@@ -3298,6 +3397,8 @@ def main():
     )
 
     plot_station_table(profile)
+
+    plot_diagnostics_image(diagnostics)
 
     plot_dashboard_card(
         profile,
