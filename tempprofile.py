@@ -136,6 +136,18 @@ OUTPUT_FILE = os.path.join(REPO_OUTPUT_DIR, "vt_pseudo_sounding.png")
 CARD_OUTPUT_FILE = os.path.join(REPO_OUTPUT_DIR, "vt_dashboard_card.png")
 TABLE_OUTPUT_FILE = os.path.join(REPO_OUTPUT_DIR, "vt_station_table.png")
 DIAGNOSTICS_OUTPUT_FILE = os.path.join(REPO_OUTPUT_DIR, "vt_diagnostics.png")
+DIAGNOSTICS_STATUS_FILE = os.path.join(REPO_OUTPUT_DIR, "vt_diagnostics_status.json")
+
+# classify_precip_type()'s raw labels, mapped to the simpler wording
+# used on the dashboard card (rain/snow/sleet/freezing rain).
+PRECIP_TYPE_DISPLAY = {
+    "All Rain": "Rain",
+    "All Snow": "Snow",
+    "Freezing Rain": "Freezing Rain",
+    "Ice Pellets": "Sleet",
+    "Rain / Wintry Mix": "Wintry Mix",
+    "Rain": "Rain",
+}
 
 # Google Drive destination for the rendered PNG. Reuses the same
 # service account as main.py (GOOGLE_CREDENTIALS). Falls back to
@@ -3391,6 +3403,50 @@ def plot_dashboard_card(profile, diagnostics):
 # 13. MAIN
 # =====================================================================
 
+def export_diagnostics_status(diagnostics, profile):
+    """
+    Export the subset of diagnostics the dashboard's small stat cards
+    need (P-Type, Froude Number) as JSON, same pattern as
+    mansfield_snow_depth.py's status file. Only plain JSON-safe types
+    here (float/str/None) - the full diagnostics dict has tuples and
+    numpy floats that don't serialize directly.
+    """
+
+    froude = diagnostics["froude_number"]
+    precip_type_raw = diagnostics["precip_type"]
+
+    latest_times = [
+        parse_iso_time(x.get("temperature_time"))
+        for x in profile
+        if parse_iso_time(x.get("temperature_time")) is not None
+    ]
+
+    status = {
+        "precip_type": PRECIP_TYPE_DISPLAY.get(precip_type_raw, precip_type_raw),
+        "precip_type_raw": precip_type_raw,
+        "froude_number": round(float(froude), 2) if froude is not None else None,
+        "flow_regime": diagnostics["flow_regime"],
+        "freezing_level_ft": diagnostics["freezing_level_ft"],
+        "mean_lapse_rate_C_km": (
+            round(float(diagnostics["mean_lapse_rate_C_km"]), 1)
+            if diagnostics["mean_lapse_rate_C_km"] is not None else None
+        ),
+        "bulk_shear_kt": (
+            round(float(diagnostics["bulk_shear_kt"]), 0)
+            if diagnostics["bulk_shear_kt"] is not None else None
+        ),
+        "observed_at": max(latest_times).isoformat() if latest_times else None,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    with open(DIAGNOSTICS_STATUS_FILE, "w") as f:
+        json.dump(status, f, indent=2)
+
+    print(f"Saved diagnostics status to: {DIAGNOSTICS_STATUS_FILE}")
+
+    return status
+
+
 def main():
 
     os.makedirs(REPO_OUTPUT_DIR, exist_ok=True)
@@ -3420,6 +3476,8 @@ def main():
     print_diagnostics(
         diagnostics
     )
+
+    export_diagnostics_status(diagnostics, profile)
 
     (
         pressure,
