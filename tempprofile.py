@@ -1581,19 +1581,22 @@ def max_inversion(profile):
 
 def inversion_pressure_bands(profile):
     """
-    Every layer (not just the single largest) where temperature
-    increases with height, as a list of (pressure_low, pressure_high)
-    tuples ready for axhspan shading on the Skew-T. A profile can have
-    more than one inverted layer (e.g. a shallow surface inversion
-    plus a separate one aloft), unlike max_inversion() which only
-    reports the strongest.
+    Every layer (not just the single largest) that is an inversion OR
+    isothermal - temperature not decreasing with height - as a list
+    of (pressure_low, pressure_high) tuples ready for axhspan shading
+    on the Skew-T. Isothermal layers are included alongside true
+    inversions because both indicate a stable capping layer; a strict
+    "warmer above" check misses a layer that's exactly flat. A profile
+    can have more than one such layer (e.g. a shallow surface
+    inversion plus a separate one aloft), unlike max_inversion() which
+    only reports the single strongest true inversion.
     """
 
     bands = []
 
     for lower, upper in zip(profile, profile[1:]):
 
-        if upper["temperature_C"] > lower["temperature_C"]:
+        if upper["temperature_C"] >= lower["temperature_C"]:
 
             p1 = lower["pressure_hPa"]
             p2 = upper["pressure_hPa"]
@@ -2642,7 +2645,7 @@ def plot_skewt(
 
     header_in = 0.7
     gap1_in = 0.12
-    bottom_margin_in = 0.15
+    bottom_margin_in = 0.52
 
     fig_width_in = content_width_in / rect_width_frac
 
