@@ -277,7 +277,11 @@ def choose_tick_interval(axis_range, target_ticks=8, candidates=(0.5, 1, 2, 2.5,
     return candidates[-1]
 
 
-def compute_skew_corrected_xlim(bottom_pressure, top_pressure, points, min_width=8.0, pad=2.0):
+def compute_skew_corrected_xlim(
+    bottom_pressure, top_pressure, points,
+    box_width_in=10.0, box_height_in=10.0,
+    min_width=8.0, pad=2.0,
+):
     """
     Determine temperature-axis limits that keep every (temperature,
     pressure) point in `points` visible, accounting for MetPy's
@@ -295,6 +299,17 @@ def compute_skew_corrected_xlim(bottom_pressure, top_pressure, points, min_width
     more square (see the padding notes above) also increased how far
     the top of the profile shifts right, and pushed it toward the
     edge of the frame.
+
+    box_width_in/box_height_in matter here: MetPy's skew-locked axes
+    doesn't necessarily fill an arbitrary given rect - when the rect's
+    aspect doesn't match the data's natural locked aspect, the actual
+    rendered geometry differs from what a same-shaped-square probe
+    would show. Since the actual output figure is now a FIXED size
+    (see plot_skewt's sizing notes) rather than one shaped to match
+    the data, the probe here has to use that same fixed box shape or
+    the correction can be wrong for exactly the days whose natural
+    aspect doesn't match it - confirmed directly: switching to a
+    fixed box without this fix let 2 of 4 test scenarios clip.
 
     Approach: render the given points against a deliberately
     oversized, arbitrary xlim so nothing clips, measure where they
@@ -316,10 +331,10 @@ def compute_skew_corrected_xlim(bottom_pressure, top_pressure, points, min_width
     provisional_left = min(raw_temps) - provisional_half_width
     provisional_right = max(raw_temps) + provisional_half_width
 
-    probe_fig = plt.figure(figsize=(10, 10))
+    probe_fig = plt.figure(figsize=(box_width_in, box_height_in))
 
     probe_skew = SkewT(
-        probe_fig, rotation=45, rect=(0.1, 0.1, 0.8, 0.8)
+        probe_fig, rotation=45, rect=(0.02, 0.02, 0.96, 0.96)
     )
 
     probe_skew.ax.set_ylim(bottom_pressure, top_pressure)
@@ -2594,6 +2609,16 @@ def plot_skewt(
     bottom_pressure = p_max + 15.0
     top_pressure = min(850.0, p_min - 15.0)
 
+    # Deliberately FIXED, not derived from the data - see the FIGURE
+    # SIZING comment below for why. Defined here (before the xlim
+    # correction) so compute_skew_corrected_xlim's probe uses this
+    # exact box shape rather than an arbitrary square one - the skew
+    # correction has to match whatever shape MetPy will actually
+    # render into, or points can still clip.
+
+    skew_width_in = 5.5
+    skew_height_in = 3.0
+
     # Temperature-axis limits, corrected for the skew transform's
     # horizontal shift with height (see compute_skew_corrected_xlim)
     # rather than just the raw temperature range - a real effect even
@@ -2613,41 +2638,27 @@ def plot_skewt(
 
     left_temperature, right_temperature = compute_skew_corrected_xlim(
         bottom_pressure, top_pressure, skew_points,
+        box_width_in=skew_width_in, box_height_in=skew_height_in,
     )
 
     # ==============================================================
     # FIGURE SIZING
     # ==============================================================
     #
-    # Probe the Skew-T's natural (aspect-locked) shape for these
-    # exact data limits, then size the figure to match it exactly so
-    # the plot fills its box with no wasted margin. See prior notes:
-    # MetPy locks a fixed 45-degree isotherm geometry, so a shallow
-    # ~100 hPa layer is naturally short and wide.
-
-    probe_fig = plt.figure(figsize=(10, 10))
-
-    probe_skew = SkewT(
-        probe_fig, rotation=45, rect=(0.1, 0.1, 0.8, 0.8)
-    )
-
-    probe_skew.ax.set_ylim(bottom_pressure, top_pressure)
-    probe_skew.ax.set_xlim(left_temperature, right_temperature)
-
-    probe_fig.canvas.draw()
-
-    probe_pos = probe_skew.ax.get_position()
-    natural_ratio = probe_pos.height / probe_pos.width
-
-    plt.close(probe_fig)
-
-    skew_width_in = 4.6
-    skew_height_in = skew_width_in * natural_ratio
-
-    # Safety floor/ceiling so an unusual data range can't blow this
-    # back up to the earlier "takes up half the dashboard" size.
-    skew_height_in = max(min(skew_height_in, 3.6), 2.6)
-    skew_width_in = skew_height_in / natural_ratio
+    # Deliberately FIXED, not derived from the data. Earlier versions
+    # probed the Skew-T's natural (aspect-locked) shape for the
+    # day's specific data and sized the figure to match it exactly.
+    # That produced a genuinely different output size on different
+    # days - some days narrower, some taller - which caused two
+    # separate visible problems on the dashboard: the fixed-length
+    # title text would collide with the date on narrow-width days,
+    # and the image's on-page footprint would visibly change size
+    # ("snap" bigger/smaller) as the underlying data changed, even
+    # though the CSS grid ratio around it never changed. A fixed
+    # figure size trades a little wasted margin on days whose data
+    # doesn't perfectly match this aspect for a stable, predictable
+    # output every time - which matters more for a fixed dashboard
+    # layout than a perfectly tight fit.
 
     wind_col_in = 0.9
     content_gap_in = 0.15
