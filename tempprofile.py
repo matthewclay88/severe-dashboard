@@ -2653,20 +2653,30 @@ def plot_skewt(
     content_gap_in = 0.15
     content_width_in = skew_width_in + content_gap_in + wind_col_in
 
-    rect_width_frac = 0.92
+    # Asymmetric, not a symmetric fraction of total width - the
+    # y-axis pressure labels live only on the left, and a 4-digit
+    # value (any bottom_pressure >= 1000 hPa, which is a completely
+    # ordinary sea-level-ish reading) needs more room than a 3-digit
+    # one. A single symmetric margin sized for 3 digits clipped every
+    # 4-digit label by several pixels - confirmed directly by
+    # measuring rendered tick label bounding boxes against the figure
+    # edge, not just eyeballing it. The right side only needs to
+    # clear the wind barb column, which is a fixed-width axes, not
+    # text that grows with the data - a smaller margin is fine there.
+    left_margin_in = 0.55
+    right_margin_in = 0.20
 
     header_in = 0.55
     gap1_in = 0.08
     bottom_margin_in = 0.52
 
-    fig_width_in = content_width_in / rect_width_frac
+    fig_width_in = left_margin_in + content_width_in + right_margin_in
 
     fig_height_in = header_in + gap1_in + skew_height_in + bottom_margin_in
 
     fig = plt.figure(figsize=(fig_width_in, fig_height_in))
 
-    rect_x0 = (1.0 - rect_width_frac) / 2.0
-    content_x0 = rect_x0
+    content_x0 = left_margin_in / fig_width_in
 
     skew_width_frac = skew_width_in / fig_width_in
     skew_height_frac = skew_height_in / fig_height_in
@@ -2897,7 +2907,7 @@ def plot_skewt(
         newest = max(latest_times)
 
         fig.text(
-            1.0 - rect_x0, (fig_height_in - 0.22) / fig_height_in,
+            1.0 - right_margin_in / fig_width_in, (fig_height_in - 0.22) / fig_height_in,
             newest.strftime("%d %b %Y %H:%M UTC"),
             fontsize=11, fontweight="bold", color="black",
             ha="right", va="top",
