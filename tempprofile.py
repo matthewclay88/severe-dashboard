@@ -2760,47 +2760,15 @@ def plot_skewt(
     if dewpoints:
         t_min = min(t_min, min(dewpoints))
 
-    # ==============================================================
-    # FIXED PRESSURE / TEMPERATURE WINDOW
-    # ==============================================================
-    #
-    # These are constants, not derived from today's data - that's
-    # the actual fix for the PNG changing size run to run. The
-    # output's shape was never determined directly by the data; it
-    # was determined by the PRESSURE and TEMPERATURE RANGES fed into
-    # the sizing probe below, and those ranges used to come straight
-    # from bottom_pressure/top_pressure/min_width, which varied with
-    # KBTV's actual pressure and the day's actual temperature spread.
-    # Fix those three inputs and the probe computes the same
-    # "natural aspect" every time, which means skew_width_in,
-    # skew_height_in, fig_width_in, and fig_height_in all come out
-    # identical run after run - a real plug-and-play PNG.
-    #
-    # These are FLOORS, not hard caps: if one unusual day's data
-    # genuinely needs more room to avoid clipping an actual
-    # observation, the window widens/heightens just for that day
-    # rather than silently cutting real weather data off screen. A
-    # rare size deviation on an extreme day is a far smaller problem
-    # on a dashboard than a hidden clipped point - but it should be
-    # rare enough in practice that the output is effectively fixed.
+    # Modest, mostly-fixed pressure padding - not tuned for squareness
+    # anymore. A fixed 880 mb ceiling trims how much sky gets shown
+    # above the summit station instead of the proportional padding
+    # used for the (since-reverted) square layout; a small safety
+    # margin keeps this sane if a station's pressure ever ends up
+    # unusually close to that ceiling.
 
-    FIXED_BOTTOM_PRESSURE_HPA = 1040.0  # comfortably above any realistic KBTV (330 ft) station pressure
-    FIXED_TOP_PRESSURE_HPA = 880.0      # existing summit-area ceiling
-    FIXED_TEMP_WIDTH_C = 24.0           # comfortably wider than a typical near-surface spread
-
-    bottom_pressure = max(FIXED_BOTTOM_PRESSURE_HPA, p_max + 15.0)
-    top_pressure = min(FIXED_TOP_PRESSURE_HPA, p_min - 15.0)
-
-    if (
-        bottom_pressure != FIXED_BOTTOM_PRESSURE_HPA
-        or top_pressure != FIXED_TOP_PRESSURE_HPA
-    ):
-        print(
-            f"[SIZING] pressure window widened beyond the fixed "
-            f"defaults today: bottom={bottom_pressure:.1f} hPa "
-            f"(fixed={FIXED_BOTTOM_PRESSURE_HPA}), "
-            f"top={top_pressure:.1f} hPa (fixed={FIXED_TOP_PRESSURE_HPA})"
-        )
+    bottom_pressure = p_max + 15.0
+    top_pressure = min(880.0, p_min - 15.0)
 
     skew_points = []
 
@@ -2826,19 +2794,28 @@ def plot_skewt(
     # shift-correction, which assumes the transform is affine and
     # consistent between its probe and the final render).
     #
-    # Width is the fixed anchor, height is derived from a probe, and
-    # neither is clamped, since a guessed clamp is exactly what
-    # caused an earlier round of this same bug. With the pressure
-    # and temperature window now fixed too (see above), this probe
-    # measures the same ratio every run, so the derived dimensions
-    # are effectively fixed as well - not just "wide", but the SAME
-    # wide every time.
+    # For this shallow ~135 hPa near-surface slice, the lock wants a
+    # SHORT, WIDE box (measured height:width ratio ~0.29 for typical
+    # data) - a true-angle Skew-T of a narrow pressure band is
+    # inherently that shape; there's no honest way to make it tall
+    # without either showing a much bigger pressure range or drawing
+    # the skew at the wrong angle. "Big centerpiece" here means WIDE
+    # and prominent, not tall - width is the fixed anchor, height is
+    # derived from a probe, and neither is clamped, since a guessed
+    # clamp is exactly what caused an earlier round of this same bug.
 
     TARGET_SKEW_WIDTH_IN = 13.0
 
+    # Rough first-pass xlim just to have something to probe the
+    # aspect with - doesn't need to be the final, precisely-padded
+    # range, only roughly representative. min_width is intentionally
+    # generous (18 C) so that on a typical tightly-clustered day the
+    # temperature axis doesn't collapse to a razor-thin range, which
+    # would make the derived height (and therefore the day-to-day
+    # output size) swing much more than it needs to.
     rough_left, rough_right = compute_skew_corrected_xlim(
         bottom_pressure, top_pressure, skew_points,
-        box_width_in=12.0, box_height_in=12.0, min_width=FIXED_TEMP_WIDTH_C,
+        box_width_in=12.0, box_height_in=12.0, min_width=18.0,
     )
 
     height_to_width = measure_skewt_height_to_width_ratio(
@@ -2860,9 +2837,8 @@ def plot_skewt(
     left_temperature, right_temperature = compute_skew_corrected_xlim(
         bottom_pressure, top_pressure, skew_points,
         box_width_in=skew_width_in, box_height_in=skew_height_in,
-        min_width=FIXED_TEMP_WIDTH_C,
+        min_width=18.0,
     )
-
 
     # ==============================================================
     # FIGURE SIZING
