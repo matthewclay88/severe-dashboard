@@ -2172,71 +2172,98 @@ def build_diagnostics(profile):
 
     diagnostics = {}
 
-# ---------------- THERMAL ----------------
+    # ---------------- THERMAL ----------------
 
-freezing_points = [
-    (x["elevation_ft"], x["temperature_C"])
-    for x in profile
-]
-
-freezing_analysis = analyze_zero_level(freezing_points)
-
-diagnostics["freezing_level_ft"] = freezing_analysis["level_ft"]
-diagnostics["freezing_level_status"] = freezing_analysis["status"]
-diagnostics["freezing_lower_crossing_ft"] = freezing_analysis["lower_crossing_ft"]
-diagnostics["freezing_upper_crossing_ft"] = freezing_analysis["upper_crossing_ft"]
-
-
-wetbulb_series = compute_wetbulb_series(profile)
-
-if len(wetbulb_series) >= 2:
-
-    wb_points = [
-        (w["elevation_ft"], w["wetbulb_C"])
-        for w in wetbulb_series
+    freezing_points = [
+        (x["elevation_ft"], x["temperature_C"])
+        for x in profile
     ]
 
-    wb_analysis = analyze_zero_level(wb_points)
+    freezing_analysis = analyze_zero_level(freezing_points)
 
-else:
+    diagnostics["freezing_level_ft"] = freezing_analysis["level_ft"]
+    diagnostics["freezing_level_status"] = freezing_analysis["status"]
+    diagnostics["freezing_lower_crossing_ft"] = freezing_analysis["lower_crossing_ft"]
+    diagnostics["freezing_upper_crossing_ft"] = freezing_analysis["upper_crossing_ft"]
 
-    wb_analysis = {
-        "status": "unavailable",
-        "level_ft": None,
-        "lower_crossing_ft": None,
-        "upper_crossing_ft": None,
-    }
+    wetbulb_series = compute_wetbulb_series(profile)
 
+    if len(wetbulb_series) >= 2:
 
-diagnostics["wet_bulb_zero_ft"] = wb_analysis["level_ft"]
-diagnostics["wet_bulb_zero_status"] = wb_analysis["status"]
-diagnostics["wet_bulb_lower_crossing_ft"] = wb_analysis["lower_crossing_ft"]
-diagnostics["wet_bulb_upper_crossing_ft"] = wb_analysis["upper_crossing_ft"]
+        wb_points = [
+            (w["elevation_ft"], w["wetbulb_C"])
+            for w in wetbulb_series
+        ]
 
-# ---------------- WIND / TERRAIN ----------------
+        wb_analysis = analyze_zero_level(wb_points)
 
-diagnostics["bulk_shear_kt"] = bulk_shear(profile)
+    else:
 
-N, U, Fr = brunt_vaisala_and_froude(profile)
+        wb_analysis = {
+            "status": "unavailable",
+            "level_ft": None,
+            "lower_crossing_ft": None,
+            "upper_crossing_ft": None,
+        }
 
-diagnostics["brunt_vaisala_N"] = N
-diagnostics["froude_number"] = Fr
-diagnostics["flow_regime"] = classify_flow_regime(Fr)
+    diagnostics["wet_bulb_zero_ft"] = wb_analysis["level_ft"]
+    diagnostics["wet_bulb_zero_status"] = wb_analysis["status"]
+    diagnostics["wet_bulb_lower_crossing_ft"] = wb_analysis["lower_crossing_ft"]
+    diagnostics["wet_bulb_upper_crossing_ft"] = wb_analysis["upper_crossing_ft"]
 
-# ---------------- MELTING LAYER / PRECIP TYPE ----------------
+    # ---------------- THERMAL / STABILITY ----------------
 
-melt = melting_layer_summary(profile)
-diagnostics.update(melt)
+    rh_values = [
+        x["relative_humidity_pct"]
+        for x in profile
+        if x.get("relative_humidity_pct") is not None
+    ]
 
-Ep, En = bourgouin_energy(profile)
+    diagnostics["mean_relative_humidity_pct"] = (
+        float(np.mean(rh_values))
+        if rh_values else None
+    )
 
-diagnostics["positive_energy_Jkg"] = Ep
-diagnostics["negative_energy_Jkg"] = En
-diagnostics["precip_type"] = classify_precip_type(
-    Ep, En, profile[0]["temperature_C"]
-)
+    diagnostics["mean_lapse_rate_C_km"] = mean_lapse_rate(profile)
+    diagnostics["max_inversion"] = max_inversion(profile)
+    diagnostics["layer_lapse_rates"] = layer_lapse_rates(profile)
 
-return diagnostics
+    stability, stability_subtext = stability_label(
+        diagnostics["mean_lapse_rate_C_km"],
+        diagnostics["max_inversion"],
+    )
+
+    diagnostics["stability_label"] = stability
+    diagnostics["stability_subtext"] = stability_subtext
+
+    # ---------------- WIND / TERRAIN ----------------
+
+    diagnostics["bulk_shear_kt"] = bulk_shear(profile)
+
+    N, U, Fr = brunt_vaisala_and_froude(profile)
+
+    diagnostics["brunt_vaisala_N"] = N
+    diagnostics["froude_number"] = Fr
+    diagnostics["flow_regime"] = classify_flow_regime(Fr)
+
+    # ---------------- MELTING LAYER / PRECIP TYPE ----------------
+
+    melt = melting_layer_summary(profile)
+    diagnostics.update(melt)
+
+    Ep, En = bourgouin_energy(profile)
+
+    diagnostics["positive_energy_Jkg"] = Ep
+    diagnostics["negative_energy_Jkg"] = En
+
+    diagnostics["precip_type"] = classify_precip_type(
+        Ep,
+        En,
+        profile[0]["temperature_C"],
+    )
+
+    return diagnostics
+    
 def diagnostic_display_rows(diagnostics):
     """
     Build the (label, value, is_section_header) rows shared by the
