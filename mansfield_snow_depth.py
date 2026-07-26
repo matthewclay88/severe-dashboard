@@ -70,6 +70,22 @@ MIN_URL = "https://www.weather.gov/source/btv/rec/mmn/mindepth.xml"
 HISTORY_CSV_URL = "https://s3.amazonaws.com/matthewparrilla.com/snow-depth.csv"
 AVERAGE_ROW_LABEL = "Average Season"
 
+HYD_URL = "https://forecast.weather.gov/product.php"
+HYD_PARAMS = {"site": "BTV", "issuedby": "BTV", "product": "HYD", "format": "txt", "glossary": "0"}
+HYD_MAX_VERSION_FALLBACK = 3
+
+HYD_COLUMN_LABELS = ["24 Hrs", "Max", "Min", "Cur", "Weather", "New", "Total", "SWE"]
+HYD_COLUMN_FIELD_NAMES = {
+    "24 Hrs": "precip_24hr",
+    "Max": "temp_max",
+    "Min": "temp_min",
+    "Cur": "temp_cur",
+    "Weather": "present_weather",
+    "New": "snow_new",
+    "Total": "snow_total",
+    "SWE": "snow_swe",
+}
+
 HEADERS = {
     "User-Agent": (
         "MountMansfieldSnowDepth/1.0 (dashboard status card)"
@@ -286,6 +302,164 @@ def rank_for_day(day_labels, season_rows, day_index, current_depth):
 
     return rank, len(comparisons), deepest_season, record_high_in, record_low_in
 
+# =====================================================================
+# CURRENT DEPTH (HYDBTV - Daily Hydrometeorological Data Summary)
+# =====================================================================
+
+def extract_hyd_pre_text(html):
+    """
+    Pull raw text out of the <pre>...</pre> block(s) on a
+    forecast.weather.gov product.php page. Concatenates every <pre>
+    block rather than assuming there's exactly one, same tolerant
+    approach as the RRSBTV parsing on the JS side of the dashboard,
+    since these NWS product pages have shown that same quirk.
+    """
+
+    matches = re.findall(r"<pre[^>]*>([\s\S]*?)</pre>", html)
+
+    if not matches:
+        return None
+
+    text = "\n".join(matches)
+
+    return (
+        text.replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+    )
+
+
+def fetch_hyd_product_text(version):
+    """
+    Fetch one HYDBTV issuance (version=1 is current, version=2/3 are
+    progressively older reissues) and return its raw product text, or
+    None if the page didn't contain a <pre> block at all.
+    """
+
+    params = dict(HYD_PARAMS, version=str(version))
+
+    response = requests.get(HYD_URL, params=params, headers=HEADERS, timeout=30)
+    response.raise_for_status()
+
+    return extract_hyd_pre_text(response.text)
+
+
+def hyd_column_bounds(header_line):
+    """
+    (start, end) character ranges for each HYD sub-column, derived
+    from the product's own header line rather than hardcoded offsets -
+    this is boilerplate NWS output, but trusting the actual page over
+    an assumed fixed offset costs nothing and protects against a
+    future formatting tweak silently breaking this.
+    """
+
+    positions = []
+
+    for label in HYD_COLUMN_LABELS:
+        idx = header_line.find(label)
+        if idx == -1:
+            return None
+        positions.append((label, idx))
+
+    bounds = {}
+
+    for i, (label, start) in enumerate(positions):
+        end = positions[i + 1][1] if i + 1 < len(positions) else None
+        bounds[label] = (start, end)
+
+    return bounds
+
+
+def parse_mansfield_row(product_text):
+    """
+    Slice the Mount Mansfield row by the header's own column
+    positions - Mansfield frequently omits Precip/Present Weather/New/
+    SWE, and position-based slicing (instead of assuming a fixed count
+    of whitespace-separated tokens) is the only reliable way to land
+    on "Total" regardless of which other fields are blank that day.
+
+    Returns a dict of field_name -> raw stripped string, or None if
+    this issuance has no Mount Mansfield row at all (the without-
+    Mansfield-data reissue case).
+    """
+
+    header_match = re.search(r"^\s*24 Hrs.*SWE\s*$", product_text, re.MULTILINE)
+
+    if not header_match:
+        return None
+
+    bounds = hyd_column_bounds(header_match.group(0))
+
+    if bounds is None:
+        return None
+
+    row_match = re.search(r"^Mount Mansfield.*$", product_text, re.MULTILINE)
+
+    if not row_match:
+        return None
+
+    row = row_match.group(0)
+
+    fields = {}
+
+    for label, (start, end) in bounds.items():
+        raw = row[start:end] if end is not None else row[start:]
+        fields[HYD_COLUMN_FIELD_NAMES[label]] = raw.strip()
+
+    return fields
+
+
+def parse_snow_total_inches(fields):
+    """
+    Mansfield's "Total" field as a float, or None if it's blank
+    (not reported) or "M" (missing/instrument outage).
+    """
+
+    if not fields:
+        return None
+
+    raw = fields.get("snow_total", "")
+
+    if raw in ("", "M", "T"):
+        return None
+
+    try:
+        return float(raw)
+    except ValueError:
+        return None
+
+
+def fetch_current_mansfield_depth():
+    """
+    Mount Mansfield's current total snow depth straight from HYDBTV,
+    rather than waiting on Parrilla's CSV to catch up to it. Walks
+    backward through the last few issuances (version=1, 2, 3) until
+    one has a usable Mansfield Total - see the HYD_MAX_VERSION_FALLBACK
+    comment above for why that's necessary.
+    """
+
+    for version in range(1, HYD_MAX_VERSION_FALLBACK + 1):
+
+        try:
+            product_text = fetch_hyd_product_text(version)
+        except requests.RequestException as error:
+            print(f"HYD version={version} fetch failed: {error}")
+            continue
+
+        if not product_text:
+            continue
+
+        depth = parse_snow_total_inches(parse_mansfield_row(product_text))
+
+        if depth is not None:
+            return {"depth_in": depth, "hyd_version": version}
+
+    print(
+        "HYD: no usable Mount Mansfield Total depth found in the last "
+        f"{HYD_MAX_VERSION_FALLBACK} issuances."
+    )
+
+    return None
 
 def build_snow_depth_observation(as_of=None):
     """
@@ -332,6 +506,8 @@ def build_snow_depth_observation(as_of=None):
             "observed_date_label": None,
             "current_depth_in": None,
             "normal_depth_in": None,
+            "record_high_in": None,
+            "record_low_in": None,
             "departure_in": None,
             "departure_text": "No data reported yet this season",
             "rank": None,
@@ -340,6 +516,21 @@ def build_snow_depth_observation(as_of=None):
 
     current_depth = float(current_values[idx])
     obs_label = day_labels[idx]
+
+    # Prefer the live HYDBTV reading over the CSV's current-season
+    # value when we can get one - the CSV lags behind HYDBTV itself
+    # (Parrilla's site says it updates "within the hour" of a new
+    # HYDBTV issuance, so the CSV is never actually the freshest
+    # source). idx/obs_label above still come from the CSV since we
+    # need them to look up normal_depth_in and rank_for_day() against
+    # the right day-of-season column either way.
+    hyd_result = fetch_current_mansfield_depth()
+
+    if hyd_result is not None:
+        current_depth = hyd_result["depth_in"]
+        current_depth_source = f"HYDBTV (version={hyd_result['hyd_version']})"
+    else:
+        current_depth_source = "matthewparrilla.com/mansfield-stake (fallback, HYDBTV unavailable)"
 
     average_values = season_rows.get(AVERAGE_ROW_LABEL, [])
     normal_depth = None
@@ -371,6 +562,7 @@ def build_snow_depth_observation(as_of=None):
         **base_result,
         "observed_date_label": obs_label,
         "current_depth_in": current_depth,
+        "current_depth_source": current_depth_source,
         "normal_depth_in": normal_depth,
         "record_high_in": record_high_in,
         "record_low_in": record_low_in,
