@@ -2710,7 +2710,7 @@ def plot_skewt(
     # render into, or points can still clip.
 
     skew_width_in = 5.5
-    skew_height_in = 4.2
+    skew_height_in = 3.0
 
     # Temperature-axis limits, corrected for the skew transform's
     # horizontal shift with height (see compute_skew_corrected_xlim)
