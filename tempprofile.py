@@ -2784,7 +2784,7 @@ def plot_skewt(
     # on a dashboard than a hidden clipped point - but it should be
     # rare enough in practice that the output is effectively fixed.
 
-    FIXED_BOTTOM_PRESSURE_HPA = 1020.0  # comfortably above any realistic KBTV (330 ft) station pressure
+    FIXED_BOTTOM_PRESSURE_HPA = 1040.0  # comfortably above any realistic KBTV (330 ft) station pressure
     FIXED_TOP_PRESSURE_HPA = 860.0      # existing summit-area ceiling
     FIXED_TEMP_WIDTH_C = 18.0           # comfortably wider than a typical near-surface spread
 
