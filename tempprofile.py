@@ -276,6 +276,56 @@ def choose_tick_interval(axis_range, target_ticks=8, candidates=(0.5, 1, 2, 2.5,
 
     return candidates[-1]
 
+def measure_skewt_height_to_width_ratio(
+    bottom_pressure, top_pressure, left_temperature, right_temperature,
+    probe_size_in=14.0,
+):
+    """
+    Determine the height:width ratio MetPy's SkewT will actually
+    render for the given pressure/temperature limits, independent of
+    whatever box it's eventually placed in.
+
+    SkewT locks its own axes aspect internally
+    (ax.set_aspect(80.5, adjustable='box')) so the 45-degree skew
+    lines render at a true 45 degrees on screen. That means the axes
+    does NOT simply fill whatever rect it's given - if the rect's
+    width:height doesn't match the ratio the lock wants for these
+    specific xlim/ylim, matplotlib shrinks the axes down to
+    whichever dimension is the binding constraint, and the rest of
+    the given rect renders as blank space around it. This is the
+    actual mechanism behind the sounding shrinking no matter how
+    much bigger the surrounding figure got - the box's inches were
+    never what determined the chart's rendered size; the data
+    ranges were, via this lock.
+
+    Probes with a deliberately oversized, square box (14in) so
+    neither dimension is the binding constraint, and reads back the
+    axes' actual rendered pixel box to recover the aspect the lock
+    wants for this pressure/temperature range. skew_width_in and
+    skew_height_in in plot_skewt() are then DERIVED from this
+    measurement - one fixed, one computed - rather than picked by
+    guesswork, which is the only way to guarantee the axes actually
+    fills the rect it's given.
+    """
+
+    probe_fig = plt.figure(figsize=(probe_size_in, probe_size_in))
+
+    probe_skew = SkewT(
+        probe_fig, rotation=45, rect=(0.02, 0.02, 0.96, 0.96)
+    )
+
+    probe_skew.ax.set_ylim(bottom_pressure, top_pressure)
+    probe_skew.ax.set_xlim(left_temperature, right_temperature)
+
+    probe_fig.canvas.draw()
+
+    bbox = probe_skew.ax.get_window_extent()
+
+    ratio = bbox.height / bbox.width
+
+    plt.close(probe_fig)
+
+    return ratio
 
 def compute_skew_corrected_xlim(
     bottom_pressure, top_pressure, points,
@@ -2702,21 +2752,6 @@ def plot_skewt(
     bottom_pressure = p_max + 15.0
     top_pressure = min(880.0, p_min - 15.0)
 
-    # Deliberately FIXED, not derived from the data - see the FIGURE
-    # SIZING comment below for why. Defined here (before the xlim
-    # correction) so compute_skew_corrected_xlim's probe uses this
-    # exact box shape rather than an arbitrary square one - the skew
-    # correction has to match whatever shape MetPy will actually
-    # render into, or points can still clip.
-
-    skew_width_in = 5.5
-    skew_height_in = 4.2
-
-    # Temperature-axis limits, corrected for the skew transform's
-    # horizontal shift with height (see compute_skew_corrected_xlim)
-    # rather than just the raw temperature range - a real effect even
-    # at this more modest pressure range, just smaller in magnitude.
-
     skew_points = []
 
     for station in profile:
@@ -2729,9 +2764,49 @@ def plot_skewt(
         if station.get("wetbulb_C") is not None:
             skew_points.append((station["wetbulb_C"], station["pressure_hPa"]))
 
+    # ==============================================================
+    # SKEW-T BOX SIZE - DERIVED, NOT GUESSED
+    # ==============================================================
+    #
+    # See measure_skewt_height_to_width_ratio's docstring for why a
+    # guessed skew_width_in/skew_height_in doesn't work: SkewT locks
+    # its own aspect, so the box has to be SHAPED to match what the
+    # data wants, not the other way around. Width is the dimension
+    # that actually matters for the rest of the dashboard layout
+    # (title text, the wind barb column), so it's the fixed anchor -
+    # deliberately large, since this chart is the centerpiece.
+    # Height is derived from a probe and clamped to a sane range so
+    # one unusually flat or deep day's data can't produce an
+    # absurdly short or tall image.
+
+    TARGET_SKEW_WIDTH_IN = 9.0
+
+    # Rough first-pass xlim just to have something to probe the
+    # aspect with - doesn't need to be the final, precisely-padded
+    # range, only roughly representative. min_width is intentionally
+    # generous (18 C) so that on a typical tightly-clustered day the
+    # temperature axis doesn't collapse to a razor-thin range, which
+    # would make the derived height (and therefore the day-to-day
+    # output size) swing much more than it needs to.
+    rough_left, rough_right = compute_skew_corrected_xlim(
+        bottom_pressure, top_pressure, skew_points,
+        box_width_in=12.0, box_height_in=12.0, min_width=18.0,
+    )
+
+    height_to_width = measure_skewt_height_to_width_ratio(
+        bottom_pressure, top_pressure, rough_left, rough_right,
+    )
+
+    skew_width_in = TARGET_SKEW_WIDTH_IN
+    skew_height_in = max(5.0, min(9.0, skew_width_in * height_to_width))
+
+    # Final xlim, corrected against the box we're ACTUALLY going to
+    # use - has to match, not just be close (see
+    # compute_skew_corrected_xlim's own docstring).
     left_temperature, right_temperature = compute_skew_corrected_xlim(
         bottom_pressure, top_pressure, skew_points,
         box_width_in=skew_width_in, box_height_in=skew_height_in,
+        min_width=18.0,
     )
 
     # ==============================================================
