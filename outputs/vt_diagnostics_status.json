@@ -5,7 +5,7 @@
   "flow_regime": "Blocked",
   "freezing_level_ft": null,
   "mean_lapse_rate_C_km": 6.9,
-  "bulk_shear_kt": 3.0,
+  "bulk_shear_kt": 2.0,
   "observed_at": "2026-07-26T12:48:00+00:00",
-  "generated_at": "2026-07-26T12:52:45.082774+00:00"
+  "generated_at": "2026-07-26T13:03:29.063649+00:00"
 }
