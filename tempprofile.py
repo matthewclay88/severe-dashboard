@@ -3448,6 +3448,7 @@ def export_diagnostics_status(diagnostics, profile):
         "froude_number": round(float(froude), 2) if froude is not None else None,
         "flow_regime": diagnostics["flow_regime"],
         "freezing_level_ft": diagnostics["freezing_level_ft"],
+        "wet_bulb_zero_ft": diagnostics["wet_bulb_zero_ft"],
         "mean_lapse_rate_C_km": (
             round(float(diagnostics["mean_lapse_rate_C_km"]), 1)
             if diagnostics["mean_lapse_rate_C_km"] is not None else None
