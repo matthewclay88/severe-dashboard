@@ -2700,7 +2700,7 @@ def plot_skewt(
     # unusually close to that ceiling.
 
     bottom_pressure = p_max + 15.0
-    top_pressure = min(850.0, p_min - 15.0)
+    top_pressure = min(880.0, p_min - 15.0)
 
     # Deliberately FIXED, not derived from the data - see the FIGURE
     # SIZING comment below for why. Defined here (before the xlim
@@ -2767,7 +2767,7 @@ def plot_skewt(
     # edge, not just eyeballing it. The right side only needs to
     # clear the wind barb column, which is a fixed-width axes, not
     # text that grows with the data - a smaller margin is fine there.
-    left_margin_in = 0.55
+    left_margin_in = 0.78
     right_margin_in = 0.20
 
     header_in = 0.62
@@ -2828,17 +2828,17 @@ def plot_skewt(
         (x for x in profile if x["stid"] == "KBTV"), profile[0]
     )
 
-    tick_base = 10.0 * round(kbtv_station["pressure_hPa"] / 10.0)
+    tick_base = 20.0 * round(kbtv_station["pressure_hPa"] / 20.0)
 
     yticks = []
     tick = tick_base
 
-    while tick >= top_pressure - 10:
+    while tick >= top_pressure - 20:
 
-        if tick <= bottom_pressure + 10:
+        if tick <= bottom_pressure + 20:
             yticks.append(tick)
 
-        tick -= 10
+        tick -= 20
 
     # FixedLocator/FixedFormatter (not plain set_yticks/set_yticklabels)
     # so these persist through any later redraw - a log-scale y-axis
