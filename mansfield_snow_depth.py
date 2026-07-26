@@ -463,11 +463,24 @@ def fetch_current_mansfield_depth():
 
 def build_snow_depth_observation(as_of=None):
     """
-    Current depth + departure from normal (and rank against 70+ years
-    of history), from Matt Parrilla's snow-depth.csv.
+    Current depth (preferring live HYDBTV, falling back to the CSV's
+    current-season value) + departure from normal and rank against
+    70+ years of history (both only computable when the CSV has a
+    day-of-season column to compare against, i.e. during the tracked
+    Sep-Jun season).
+
+    HYDBTV is attempted unconditionally, regardless of season - it's
+    a live station reading, not bound by the CSV's season-only
+    column range, so "off-season" per the CSV doesn't mean HYDBTV
+    has nothing to say. Departure/normal/rank are the only pieces
+    that gracefully degrade to None off-season, since those
+    genuinely depend on a day-of-season column that doesn't exist
+    for Jul/Aug.
     """
 
     as_of = as_of or datetime.now(timezone.utc).date()
+
+    hyd_result = fetch_current_mansfield_depth()
 
     day_labels, season_rows = fetch_snow_depth_history()
 
@@ -481,13 +494,35 @@ def build_snow_depth_observation(as_of=None):
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
 
+    # No CSV day-of-season column to compare against (Jul/Aug) - but
+    # HYDBTV may still have a real live current-depth reading, so
+    # surface that even though departure/normal/rank can't be
+    # computed against a day-of-season column that doesn't exist.
     if season_label is None or season_label not in season_rows:
+
+        if hyd_result is not None:
+
+            return {
+                **base_result,
+                "observed_date_label": None,
+                "current_depth_in": hyd_result["depth_in"],
+                "current_depth_source": f"HYDBTV (version={hyd_result['hyd_version']})",
+                "normal_depth_in": None,
+                "record_high_in": None,
+                "record_low_in": None,
+                "departure_in": None,
+                "departure_text": "Off-season \u2014 normal unavailable",
+                "rank": None,
+                "rank_of": None,
+            }
 
         return {
             **base_result,
             "observed_date_label": None,
             "current_depth_in": None,
             "normal_depth_in": None,
+            "record_high_in": None,
+            "record_low_in": None,
             "departure_in": None,
             "departure_text": "Off-season \u2014 no current tracking",
             "rank": None,
@@ -499,12 +534,13 @@ def build_snow_depth_observation(as_of=None):
     current_values = season_rows[season_label]
     idx = latest_reported_index(day_labels, current_values, as_of_label)
 
-    if idx is None:
+    if idx is None and hyd_result is None:
 
         return {
             **base_result,
             "observed_date_label": None,
             "current_depth_in": None,
+            "current_depth_source": None,
             "normal_depth_in": None,
             "record_high_in": None,
             "record_low_in": None,
@@ -514,34 +550,41 @@ def build_snow_depth_observation(as_of=None):
             "rank_of": None,
         }
 
-    current_depth = float(current_values[idx])
-    obs_label = day_labels[idx]
+    # idx/obs_label are still needed (even when HYD has the current
+    # depth) to look up normal_depth_in and rank_for_day() against
+    # the right day-of-season column. Fall back to the most recent
+    # CSV-reported day if the CSV itself has nothing for today yet
+    # but HYD does.
+    if idx is None:
+        idx = latest_reported_index(day_labels, current_values, day_labels[-1])
+
+    obs_label = day_labels[idx] if idx is not None else None
 
     # Prefer the live HYDBTV reading over the CSV's current-season
     # value when we can get one - the CSV lags behind HYDBTV itself
     # (Parrilla's site says it updates "within the hour" of a new
     # HYDBTV issuance, so the CSV is never actually the freshest
-    # source). idx/obs_label above still come from the CSV since we
-    # need them to look up normal_depth_in and rank_for_day() against
-    # the right day-of-season column either way.
-    hyd_result = fetch_current_mansfield_depth()
-
+    # source).
     if hyd_result is not None:
         current_depth = hyd_result["depth_in"]
         current_depth_source = f"HYDBTV (version={hyd_result['hyd_version']})"
-    else:
+    elif idx is not None:
+        current_depth = float(current_values[idx])
         current_depth_source = "matthewparrilla.com/mansfield-stake (fallback, HYDBTV unavailable)"
+    else:
+        current_depth = None
+        current_depth_source = None
 
     average_values = season_rows.get(AVERAGE_ROW_LABEL, [])
     normal_depth = None
 
-    if idx < len(average_values) and average_values[idx].strip() != "":
+    if idx is not None and idx < len(average_values) and average_values[idx].strip() != "":
         normal_depth = float(average_values[idx])
 
-    if normal_depth is None:
+    if normal_depth is None or current_depth is None:
 
         departure = None
-        departure_text = "Normal unavailable"
+        departure_text = "Normal unavailable" if current_depth is not None else "No data reported yet this season"
 
     else:
 
@@ -554,9 +597,12 @@ def build_snow_depth_observation(as_of=None):
         else:
             departure_text = f"{departure:.0f} in below normal"
 
-    rank, rank_of, deepest_season, record_high_in, record_low_in = rank_for_day(
-        day_labels, season_rows, idx, current_depth
-    )
+    if idx is not None and current_depth is not None:
+        rank, rank_of, deepest_season, record_high_in, record_low_in = rank_for_day(
+            day_labels, season_rows, idx, current_depth
+        )
+    else:
+        rank, rank_of, deepest_season, record_high_in, record_low_in = None, None, None, None, None
 
     return {
         **base_result,
@@ -591,7 +637,8 @@ def main():
 
     plot_snow_depth_chart(current_series, average_series, max_series, min_series)
 
-    # Current depth + departure: Parrilla's full-history CSV.
+    # Current depth + departure: HYDBTV live reading preferred,
+    # Parrilla's full-history CSV for normal/rank/fallback.
 
     status = build_snow_depth_observation()
 
