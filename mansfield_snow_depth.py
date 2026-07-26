@@ -269,11 +269,13 @@ def rank_for_day(day_labels, season_rows, day_index, current_depth):
             continue
 
     if not comparisons:
-        return None, 0, None
+        return None, 0, None, None, None
 
     comparisons.sort(key=lambda pair: pair[1], reverse=True)
 
     deepest_season = comparisons[0][0]
+    record_high_in = comparisons[0][1]
+    record_low_in = comparisons[-1][1]
 
     rank = 1
 
@@ -282,7 +284,7 @@ def rank_for_day(day_labels, season_rows, day_index, current_depth):
         if value > current_depth:
             rank += 1
 
-    return rank, len(comparisons), deepest_season
+    return rank, len(comparisons), deepest_season, record_high_in, record_low_in
 
 
 def build_snow_depth_observation(as_of=None):
@@ -361,7 +363,7 @@ def build_snow_depth_observation(as_of=None):
         else:
             departure_text = f"{departure:.0f} in below normal"
 
-    rank, rank_of, deepest_season = rank_for_day(
+    rank, rank_of, deepest_season, record_high_in, record_low_in = rank_for_day(
         day_labels, season_rows, idx, current_depth
     )
 
@@ -370,6 +372,8 @@ def build_snow_depth_observation(as_of=None):
         "observed_date_label": obs_label,
         "current_depth_in": current_depth,
         "normal_depth_in": normal_depth,
+        "record_high_in": record_high_in,
+        "record_low_in": record_low_in,
         "departure_in": departure,
         "departure_text": departure_text,
         "rank": rank,
