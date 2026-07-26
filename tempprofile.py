@@ -2646,7 +2646,7 @@ def plot_skewt(
 
     # Safety floor/ceiling so an unusual data range can't blow this
     # back up to the earlier "takes up half the dashboard" size.
-    skew_height_in = max(min(skew_height_in, 5.0), 2.8)
+    skew_height_in = max(min(skew_height_in, 3.6), 2.6)
     skew_width_in = skew_height_in / natural_ratio
 
     wind_col_in = 0.9
@@ -2666,7 +2666,7 @@ def plot_skewt(
     left_margin_in = 0.55
     right_margin_in = 0.20
 
-    header_in = 0.55
+    header_in = 0.62
     gap1_in = 0.08
     bottom_margin_in = 0.52
 
@@ -2880,14 +2880,14 @@ def plot_skewt(
     # ==============================================================
 
     fig.text(
-        0.03, (fig_height_in - 0.22) / fig_height_in,
+        0.03, (fig_height_in - 0.20) / fig_height_in,
         "MOUNT MANSFIELD OBSERVED SLOPE PROFILE",
         fontsize=13, fontweight="bold", color="black",
         ha="left", va="top",
     )
 
     fig.text(
-        0.03, (fig_height_in - 0.40) / fig_height_in,
+        0.03, (fig_height_in - 0.44) / fig_height_in,
         profile_span_label(),
         fontsize=9, color=MUTED_TEXT,
         ha="left", va="top",
