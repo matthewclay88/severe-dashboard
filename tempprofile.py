@@ -2568,60 +2568,6 @@ def _draw_diagnostic_cards(fig, rect, cards):
                 fontsize=7.5, color=MUTED_TEXT, ha="left", va="center",
             )
 
-def _draw_sounding_station_table(fig, rect, profile, bottom_pressure, top_pressure):
-    """
-    Compact per-station table sharing the Skew-T's log-pressure
-    y-axis, so each row sits at that station's actual height on the
-    profile - a vertical listing of elevation/obs meant to live
-    inside the sounding panel itself, not the separate wide
-    STATION OBSERVATIONS image from plot_station_table().
-    """
-
-    x0, y0, w, h = rect
-
-    ax = fig.add_axes([x0, y0, w, h])
-    ax.set_ylim(bottom_pressure, top_pressure)
-    ax.set_yscale("log")
-    ax.set_xlim(0, 1)
-    ax.set_xticks([])
-    ax.set_yticks([])
-
-    for spine in ax.spines.values():
-        spine.set_visible(False)
-
-    ax.text(
-        0.0, 1.0, "STATION",
-        transform=ax.transAxes,
-        fontsize=7.5, fontweight="bold", color=MUTED_TEXT,
-        ha="left", va="bottom",
-    )
-
-    col_x = {"stid": 0.0, "elev": 0.34, "temp": 0.64, "wind": 0.82}
-
-    for station in profile:
-
-        p = station["pressure_hPa"]
-
-        temp = station.get("temperature_C")
-        temp_text = f"{temp:.0f}\u00b0" if temp is not None else "--"
-
-        speed = station.get("wind_speed_kmh")
-        direction = station.get("wind_direction_deg")
-
-        if speed is not None and direction is not None:
-            speed_kt = (speed * units("km/hour")).to("knots").m
-            wind_text = "Calm" if speed_kt < 0.5 else f"{direction:03.0f}/{speed_kt:.0f}"
-        else:
-            wind_text = "--"
-
-        ax.text(col_x["stid"], p, station["stid"], fontsize=7.5,
-                 fontweight="bold", color="black", ha="left", va="center")
-        ax.text(col_x["elev"], p, f"{station['elevation_ft']:.0f}'", fontsize=7.5,
-                 color=MUTED_TEXT, ha="left", va="center")
-        ax.text(col_x["temp"], p, temp_text, fontsize=7.5, fontweight="bold",
-                 color=TEMP_COLOR, ha="left", va="center")
-        ax.text(col_x["wind"], p, wind_text, fontsize=7,
-                 color=MUTED_TEXT, ha="left", va="center")
 
 def plot_skewt(
     profile,
@@ -2670,7 +2616,7 @@ def plot_skewt(
     # correction has to match whatever shape MetPy will actually
     # render into, or points can still clip.
 
-    skew_width_in = 4.4
+    skew_width_in = 5.5
     skew_height_in = 3.0
 
     # Temperature-axis limits, corrected for the skew transform's
@@ -2715,13 +2661,8 @@ def plot_skewt(
     # layout than a perfectly tight fit.
 
     wind_col_in = 0.9
-    table_col_in = 2.3
     content_gap_in = 0.15
-    table_gap_in = 0.12
-    content_width_in = (
-        skew_width_in + content_gap_in + wind_col_in
-        + table_gap_in + table_col_in
-    )
+    content_width_in = skew_width_in + content_gap_in + wind_col_in
 
     # Asymmetric, not a symmetric fraction of total width - the
     # y-axis pressure labels live only on the left, and a 4-digit
@@ -2944,20 +2885,6 @@ def plot_skewt(
             v.to("knots").m,
             length=6.5, linewidth=1.2,
         )
-    # ==============================================================
-    # STATION TABLE COLUMN (vertical, pressure-aligned)
-    # ==============================================================
-
-    table_x0 = wind_x0 + wind_width_frac + table_gap_in / fig_width_in
-    table_width_frac = table_col_in / fig_width_in
-
-    _draw_sounding_station_table(
-        fig,
-        (table_x0, skew_y0, table_width_frac, skew_height_frac),
-        profile,
-        bottom_pressure,
-        top_pressure,
-    )
 
     # ==============================================================
     # HEADER
