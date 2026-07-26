@@ -1536,29 +1536,100 @@ def interp_crossing(z1, v1, z2, v2, target=0.0):
 
     return z1 + frac * (z2 - z1)
 
-
-def find_zero_level(points):
+def analyze_zero_level(points):
     """
-    Lowest elevation (ft) at which a series crosses 0, given a list
-    of (elevation_ft, value) tuples with value already screened for
-    None. Returns None if no crossing exists in the observed layer.
+    Analyze the 0 C structure of an elevation-sorted series.
+
+    Returns:
+        {
+            "status": str,
+            "level_ft": float or None,
+            "lower_crossing_ft": float or None,
+            "upper_crossing_ft": float or None,
+        }
+
+    status:
+        "above_layer"   - all observed values > 0 C
+        "surface"   - all observed values < 0 C
+        "normal"        - warm below, cold above
+        "warm_layer"    - cold below, warm above
+        "warm_nose"     - cold below, warm layer, cold again
+        "unavailable"   - fewer than two valid observations
     """
 
-    points = [p for p in points if p[1] is not None]
+    points = sorted(
+        [p for p in points if p[1] is not None],
+        key=lambda p: p[0]
+    )
+
+    result = {
+        "status": "unavailable",
+        "level_ft": None,
+        "lower_crossing_ft": None,
+        "upper_crossing_ft": None,
+    }
 
     if len(points) < 2:
-        return None
+        return result
+
+    values = [v for _, v in points]
+
+    # Entire observed profile is warm.
+    if all(v > 0 for v in values):
+        result["status"] = "above_layer"
+        return result
+
+    # Entire observed profile is cold.
+    if all(v < 0 for v in values):
+        result["status"] = "surface"
+        return result
+
+    crossings = []
 
     for (z1, v1), (z2, v2) in zip(points, points[1:]):
 
         if v1 == 0:
-            return z1
+            crossing = z1
 
-        if (v1 > 0 > v2) or (v1 < 0 < v2):
-            return interp_crossing(z1, v1, z2, v2)
+        elif v2 == 0:
+            crossing = z2
 
-    return None
+        elif (v1 > 0 > v2) or (v1 < 0 < v2):
+            crossing = interp_crossing(z1, v1, z2, v2)
 
+        else:
+            continue
+
+        if crossing is not None:
+            if not crossings or abs(crossing - crossings[-1]) > 0.1:
+                crossings.append(crossing)
+
+    if not crossings:
+        return result
+
+    surface_value = points[0][1]
+
+    # Warm at lowest observation -> traditional freezing level.
+    if surface_value >= 0:
+        result["status"] = "normal"
+        result["level_ft"] = crossings[0]
+        return result
+
+    # Cold at lowest observation and at least two crossings:
+    # elevated warm nose bounded by two zero crossings.
+    if len(crossings) >= 2:
+        result["status"] = "warm_nose"
+        result["lower_crossing_ft"] = crossings[0]
+        result["upper_crossing_ft"] = crossings[1]
+        result["level_ft"] = crossings[0]
+        return result
+
+    # Cold at lowest observation with one upward crossing.
+    result["status"] = "warm_layer"
+    result["level_ft"] = crossings[0]
+    result["lower_crossing_ft"] = crossings[0]
+
+    return result
 
 def mean_lapse_rate(profile):
     """
@@ -2101,49 +2172,46 @@ def build_diagnostics(profile):
 
     diagnostics = {}
 
-    # ---------------- THERMAL ----------------
+# ---------------- THERMAL ----------------
 
-    freezing_points = [
-        (x["elevation_ft"], x["temperature_C"]) for x in profile
+freezing_points = [
+    (x["elevation_ft"], x["temperature_C"])
+    for x in profile
+]
+
+freezing_analysis = analyze_zero_level(freezing_points)
+
+diagnostics["freezing_level_ft"] = freezing_analysis["level_ft"]
+diagnostics["freezing_level_status"] = freezing_analysis["status"]
+diagnostics["freezing_lower_crossing_ft"] = freezing_analysis["lower_crossing_ft"]
+diagnostics["freezing_upper_crossing_ft"] = freezing_analysis["upper_crossing_ft"]
+
+
+wetbulb_series = compute_wetbulb_series(profile)
+
+if len(wetbulb_series) >= 2:
+
+    wb_points = [
+        (w["elevation_ft"], w["wetbulb_C"])
+        for w in wetbulb_series
     ]
 
-    diagnostics["freezing_level_ft"] = find_zero_level(freezing_points)
+    wb_analysis = analyze_zero_level(wb_points)
 
-    wetbulb_series = compute_wetbulb_series(profile)
+else:
 
-    if len(wetbulb_series) >= 2:
+    wb_analysis = {
+        "status": "unavailable",
+        "level_ft": None,
+        "lower_crossing_ft": None,
+        "upper_crossing_ft": None,
+    }
 
-        wb_points = [
-            (w["elevation_ft"], w["wetbulb_C"]) for w in wetbulb_series
-        ]
 
-        diagnostics["wet_bulb_zero_ft"] = find_zero_level(wb_points)
-
-    else:
-
-        diagnostics["wet_bulb_zero_ft"] = None
-
-    rh_values = [
-        x["relative_humidity_pct"]
-        for x in profile
-        if x.get("relative_humidity_pct") is not None
-    ]
-
-    diagnostics["mean_relative_humidity_pct"] = (
-        float(np.mean(rh_values)) if rh_values else None
-    )
-
-    diagnostics["mean_lapse_rate_C_km"] = mean_lapse_rate(profile)
-    diagnostics["max_inversion"] = max_inversion(profile)
-    diagnostics["layer_lapse_rates"] = layer_lapse_rates(profile)
-
-    stability, stability_subtext = stability_label(
-        diagnostics["mean_lapse_rate_C_km"],
-        diagnostics["max_inversion"],
-    )
-
-    diagnostics["stability_label"] = stability
-    diagnostics["stability_subtext"] = stability_subtext
+diagnostics["wet_bulb_zero_ft"] = wb_analysis["level_ft"]
+diagnostics["wet_bulb_zero_status"] = wb_analysis["status"]
+diagnostics["wet_bulb_lower_crossing_ft"] = wb_analysis["lower_crossing_ft"]
+diagnostics["wet_bulb_upper_crossing_ft"] = wb_analysis["upper_crossing_ft"]
 
     # ---------------- WIND / TERRAIN ----------------
 
@@ -3447,8 +3515,17 @@ def export_diagnostics_status(diagnostics, profile):
         "precip_type_raw": precip_type_raw,
         "froude_number": round(float(froude), 2) if froude is not None else None,
         "flow_regime": diagnostics["flow_regime"],
+        
         "freezing_level_ft": diagnostics["freezing_level_ft"],
+        "freezing_level_status": diagnostics["freezing_level_status"],
+        "freezing_lower_crossing_ft": diagnostics["freezing_lower_crossing_ft"],
+        "freezing_upper_crossing_ft": diagnostics["freezing_upper_crossing_ft"],
+
         "wet_bulb_zero_ft": diagnostics["wet_bulb_zero_ft"],
+        "wet_bulb_zero_status": diagnostics["wet_bulb_zero_status"],
+        "wet_bulb_lower_crossing_ft": diagnostics["wet_bulb_lower_crossing_ft"],
+        "wet_bulb_upper_crossing_ft": diagnostics["wet_bulb_upper_crossing_ft"],
+        
         "mean_lapse_rate_C_km": (
             round(float(diagnostics["mean_lapse_rate_C_km"]), 1)
             if diagnostics["mean_lapse_rate_C_km"] is not None else None
