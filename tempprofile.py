@@ -2779,7 +2779,7 @@ def plot_skewt(
     # one unusually flat or deep day's data can't produce an
     # absurdly short or tall image.
 
-    TARGET_SKEW_WIDTH_IN = 9.0
+    TARGET_SKEW_HEIGHT_IN = 7.5
 
     # Rough first-pass xlim just to have something to probe the
     # aspect with - doesn't need to be the final, precisely-padded
@@ -2797,12 +2797,15 @@ def plot_skewt(
         bottom_pressure, top_pressure, rough_left, rough_right,
     )
 
-    skew_width_in = TARGET_SKEW_WIDTH_IN
-    skew_height_in = max(5.0, min(9.0, skew_width_in * height_to_width))
+    skew_height_in = TARGET_SKEW_HEIGHT_IN
+    skew_width_in = skew_height_in / height_to_width
 
-    # Final xlim, corrected against the box we're ACTUALLY going to
-    # use - has to match, not just be close (see
-    # compute_skew_corrected_xlim's own docstring).
+    print(
+        f"[SIZING] height_to_width={height_to_width:.3f}  "
+        f"skew_width_in={skew_width_in:.2f}  "
+        f"skew_height_in={skew_height_in:.2f}"
+    )
+
     left_temperature, right_temperature = compute_skew_corrected_xlim(
         bottom_pressure, top_pressure, skew_points,
         box_width_in=skew_width_in, box_height_in=skew_height_in,
