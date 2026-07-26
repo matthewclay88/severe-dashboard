@@ -332,6 +332,8 @@ def build_snow_depth_observation(as_of=None):
             "observed_date_label": None,
             "current_depth_in": None,
             "normal_depth_in": None,
+            "record_high_in": None,
+            "record_low_in": None,
             "departure_in": None,
             "departure_text": "No data reported yet this season",
             "rank": None,
