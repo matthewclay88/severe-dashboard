@@ -2568,39 +2568,47 @@ def _draw_diagnostic_cards(fig, rect, cards):
                 fontsize=7.5, color=MUTED_TEXT, ha="left", va="center",
             )
 
-def _draw_sounding_station_table(fig, rect, profile, bottom_pressure, top_pressure):
+
+def _draw_sounding_station_table(fig, rect, profile):
     """
-    Compact per-station table sharing the Skew-T's log-pressure
-    y-axis, so each row sits at that station's actual height on the
-    profile - a vertical listing of elevation/obs meant to live
-    inside the sounding panel itself, not the separate wide
-    STATION OBSERVATIONS image from plot_station_table().
+    Compact bordered station-observation table embedded in the
+    sounding panel - a real matplotlib table (header row, gridlines,
+    alternating row shading), not a plain text list.
+
+    Earlier version positioned each row at the station's actual
+    pressure height on a log-scale axis, sharing the Skew-T's y-axis.
+    That produced two problems at once: uneven, hard-to-scan row
+    spacing (stations bunch up wherever pressure bunches up), and a
+    log-scale axis auto-enables MINOR ticks with their own
+    scientific-notation formatter (the "9 x 10^2" stray labels) -
+    the same failure mode already called out and guarded against on
+    the main Skew-T y-axis via NullLocator/NullFormatter, just not
+    carried over here. A plain evenly-spaced table sidesteps both:
+    no log axis at all, so no minor-tick artifacts, and every row
+    gets equal, readable spacing regardless of how the stations'
+    pressures happen to cluster on a given day.
+
+    Ordered summit-first (reversed(profile)) to match the chart's
+    visual sense of "up = higher on the mountain."
     """
 
     x0, y0, w, h = rect
 
     ax = fig.add_axes([x0, y0, w, h])
-    ax.set_ylim(bottom_pressure, top_pressure)
-    ax.set_yscale("log")
-    ax.set_xlim(0, 1)
-    ax.set_xticks([])
-    ax.set_yticks([])
-
-    for spine in ax.spines.values():
-        spine.set_visible(False)
+    ax.axis("off")
 
     ax.text(
-        0.0, 1.0, "STATION",
+        0.0, 1.0, "STATION OBSERVATIONS",
         transform=ax.transAxes,
         fontsize=7.5, fontweight="bold", color=MUTED_TEXT,
-        ha="left", va="bottom",
+        ha="left", va="top",
     )
 
-    col_x = {"stid": 0.0, "elev": 0.34, "temp": 0.64, "wind": 0.82}
+    col_labels = ["STATION", "ELEV", "TEMP", "WIND"]
 
-    for station in profile:
+    table_rows = []
 
-        p = station["pressure_hPa"]
+    for station in reversed(profile):
 
         temp = station.get("temperature_C")
         temp_text = f"{temp:.0f}\u00b0" if temp is not None else "--"
@@ -2614,14 +2622,49 @@ def _draw_sounding_station_table(fig, rect, profile, bottom_pressure, top_pressu
         else:
             wind_text = "--"
 
-        ax.text(col_x["stid"], p, station["stid"], fontsize=7.5,
-                 fontweight="bold", color="black", ha="left", va="center")
-        ax.text(col_x["elev"], p, f"{station['elevation_ft']:.0f}'", fontsize=7.5,
-                 color=MUTED_TEXT, ha="left", va="center")
-        ax.text(col_x["temp"], p, temp_text, fontsize=7.5, fontweight="bold",
-                 color=TEMP_COLOR, ha="left", va="center")
-        ax.text(col_x["wind"], p, wind_text, fontsize=7,
-                 color=MUTED_TEXT, ha="left", va="center")
+        table_rows.append([
+            station["stid"],
+            f"{station['elevation_ft']:.0f}'",
+            temp_text,
+            wind_text,
+        ])
+
+    # bbox leaves room at the top (below y=0.90) for the "STATION
+    # OBSERVATIONS" label above, rather than letting the header row
+    # collide with it.
+    table = ax.table(
+        cellText=table_rows,
+        colLabels=col_labels,
+        cellLoc="center", colLoc="center",
+        bbox=[0.0, 0.0, 1.0, 0.90],
+    )
+
+    table.auto_set_font_size(False)
+    table.set_fontsize(7.5)
+
+    n_cols = len(col_labels)
+
+    for col in range(n_cols):
+
+        header_cell = table[(0, col)]
+        header_cell.set_text_props(weight="bold", color=MUTED_TEXT, fontsize=7)
+        header_cell.set_facecolor(CARD_BG)
+        header_cell.set_edgecolor(DIVIDER_COLOR)
+
+    for row in range(1, len(table_rows) + 1):
+
+        for col in range(n_cols):
+
+            cell = table[(row, col)]
+            cell.set_edgecolor(DIVIDER_COLOR)
+            cell.set_facecolor("#f8f9fa" if row % 2 == 0 else "white")
+
+            if col == 2:
+                cell.get_text().set_color(TEMP_COLOR)
+                cell.get_text().set_weight("bold")
+
+    return table
+
 
 def plot_skewt(
     profile,
@@ -2944,8 +2987,9 @@ def plot_skewt(
             v.to("knots").m,
             length=6.5, linewidth=1.2,
         )
+
     # ==============================================================
-    # STATION TABLE COLUMN (vertical, pressure-aligned)
+    # STATION TABLE COLUMN (bordered table, not pressure-positioned)
     # ==============================================================
 
     table_x0 = wind_x0 + wind_width_frac + table_gap_in / fig_width_in
@@ -2955,8 +2999,6 @@ def plot_skewt(
         fig,
         (table_x0, skew_y0, table_width_frac, skew_height_frac),
         profile,
-        bottom_pressure,
-        top_pressure,
     )
 
     # ==============================================================
