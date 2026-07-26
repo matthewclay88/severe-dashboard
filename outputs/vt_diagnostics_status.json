@@ -1,11 +1,11 @@
 {
   "precip_type": "Rain",
   "precip_type_raw": "All Rain",
-  "froude_number": 0.04,
+  "froude_number": 0.09,
   "flow_regime": "Blocked",
   "freezing_level_ft": null,
-  "mean_lapse_rate_C_km": 2.8,
-  "bulk_shear_kt": 16.0,
-  "observed_at": "2026-07-26T10:48:00+00:00",
-  "generated_at": "2026-07-26T10:53:03.933762+00:00"
+  "mean_lapse_rate_C_km": 3.7,
+  "bulk_shear_kt": 15.0,
+  "observed_at": "2026-07-26T10:50:00+00:00",
+  "generated_at": "2026-07-26T11:06:28.621185+00:00"
 }
