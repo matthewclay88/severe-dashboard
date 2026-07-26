@@ -386,7 +386,7 @@ def compute_skew_corrected_xlim(
     probe_skew = SkewT(
         probe_fig, rotation=45, rect=(0.02, 0.02, 0.96, 0.96)
     )
-
+    probe_skew.ax.set_aspect("auto")
     probe_skew.ax.set_ylim(bottom_pressure, top_pressure)
     probe_skew.ax.set_xlim(provisional_left, provisional_right)
 
