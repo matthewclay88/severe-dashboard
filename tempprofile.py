@@ -2213,32 +2213,30 @@ diagnostics["wet_bulb_zero_status"] = wb_analysis["status"]
 diagnostics["wet_bulb_lower_crossing_ft"] = wb_analysis["lower_crossing_ft"]
 diagnostics["wet_bulb_upper_crossing_ft"] = wb_analysis["upper_crossing_ft"]
 
-    # ---------------- WIND / TERRAIN ----------------
+# ---------------- WIND / TERRAIN ----------------
 
-    diagnostics["bulk_shear_kt"] = bulk_shear(profile)
+diagnostics["bulk_shear_kt"] = bulk_shear(profile)
 
-    N, U, Fr = brunt_vaisala_and_froude(profile)
+N, U, Fr = brunt_vaisala_and_froude(profile)
 
-    diagnostics["brunt_vaisala_N"] = N
-    diagnostics["froude_number"] = Fr
-    diagnostics["flow_regime"] = classify_flow_regime(Fr)
+diagnostics["brunt_vaisala_N"] = N
+diagnostics["froude_number"] = Fr
+diagnostics["flow_regime"] = classify_flow_regime(Fr)
 
-    # ---------------- MELTING LAYER / PRECIP TYPE ----------------
+# ---------------- MELTING LAYER / PRECIP TYPE ----------------
 
-    melt = melting_layer_summary(profile)
-    diagnostics.update(melt)
+melt = melting_layer_summary(profile)
+diagnostics.update(melt)
 
-    Ep, En = bourgouin_energy(profile)
+Ep, En = bourgouin_energy(profile)
 
-    diagnostics["positive_energy_Jkg"] = Ep
-    diagnostics["negative_energy_Jkg"] = En
-    diagnostics["precip_type"] = classify_precip_type(
-        Ep, En, profile[0]["temperature_C"]
-    )
+diagnostics["positive_energy_Jkg"] = Ep
+diagnostics["negative_energy_Jkg"] = En
+diagnostics["precip_type"] = classify_precip_type(
+    Ep, En, profile[0]["temperature_C"]
+)
 
-    return diagnostics
-
-
+return diagnostics
 def diagnostic_display_rows(diagnostics):
     """
     Build the (label, value, is_section_header) rows shared by the
