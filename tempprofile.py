@@ -276,6 +276,7 @@ def choose_tick_interval(axis_range, target_ticks=8, candidates=(0.5, 1, 2, 2.5,
 
     return candidates[-1]
 
+
 def measure_skewt_height_to_width_ratio(
     bottom_pressure, top_pressure, left_temperature, right_temperature,
     probe_size_in=14.0,
@@ -287,25 +288,33 @@ def measure_skewt_height_to_width_ratio(
 
     SkewT locks its own axes aspect internally
     (ax.set_aspect(80.5, adjustable='box')) so the 45-degree skew
-    lines render at a true 45 degrees on screen. That means the axes
-    does NOT simply fill whatever rect it's given - if the rect's
-    width:height doesn't match the ratio the lock wants for these
-    specific xlim/ylim, matplotlib shrinks the axes down to
-    whichever dimension is the binding constraint, and the rest of
-    the given rect renders as blank space around it. This is the
-    actual mechanism behind the sounding shrinking no matter how
-    much bigger the surrounding figure got - the box's inches were
-    never what determined the chart's rendered size; the data
-    ranges were, via this lock.
+    lines render at a geometrically true 45 degrees on screen. That
+    lock is NOT optional cosmetic behavior - it's part of what makes
+    a Skew-T diagram a Skew-T (disabling it was tried directly and
+    corrupted the coordinate math compute_skew_corrected_xlim relies
+    on, since that function assumes an affine, consistent transform
+    between its probe and the final render).
+
+    Because the lock is tied to the data ranges (not the box we hand
+    it), the box has to be SHAPED to match what the lock wants, not
+    the other way around - guessing skew_width_in/skew_height_in
+    independently just produces a box the axes doesn't fill, with
+    the gap rendering as blank margin. For a shallow near-surface
+    pressure slice like this one (a small fraction of a full
+    troposphere), that natural shape is short and wide, not tall -
+    there's no honest way around that without either showing a much
+    larger pressure range or breaking the 45-degree geometry.
 
     Probes with a deliberately oversized, square box (14in) so
     neither dimension is the binding constraint, and reads back the
     axes' actual rendered pixel box to recover the aspect the lock
     wants for this pressure/temperature range. skew_width_in and
     skew_height_in in plot_skewt() are then DERIVED from this
-    measurement - one fixed, one computed - rather than picked by
-    guesswork, which is the only way to guarantee the axes actually
-    fills the rect it's given.
+    measurement - one fixed (width, since that's the dimension that
+    matters for the rest of the dashboard layout), one computed -
+    rather than picked by guesswork or clamped toward a guessed
+    range, either of which reintroduces the same mismatch this
+    probing exists to eliminate.
     """
 
     probe_fig = plt.figure(figsize=(probe_size_in, probe_size_in))
@@ -313,7 +322,7 @@ def measure_skewt_height_to_width_ratio(
     probe_skew = SkewT(
         probe_fig, rotation=45, rect=(0.02, 0.02, 0.96, 0.96)
     )
-    probe_skew.ax.set_aspect("auto")
+
     probe_skew.ax.set_ylim(bottom_pressure, top_pressure)
     probe_skew.ax.set_xlim(left_temperature, right_temperature)
 
@@ -326,6 +335,7 @@ def measure_skewt_height_to_width_ratio(
     plt.close(probe_fig)
 
     return ratio
+
 
 def compute_skew_corrected_xlim(
     bottom_pressure, top_pressure, points,
@@ -361,6 +371,14 @@ def compute_skew_corrected_xlim(
     aspect doesn't match it - confirmed directly: switching to a
     fixed box without this fix let 2 of 4 test scenarios clip.
 
+    IMPORTANT: this probe deliberately does NOT touch the axes'
+    aspect lock (no set_aspect override). The lock has to stay
+    identical between this probe and the real chart in plot_skewt(),
+    or the shift amounts measured here won't match what actually
+    happens at render time - confirmed directly: disabling the lock
+    here while the box shape was tuned for the LOCKED aspect produced
+    wildly wrong (garbage) corrected limits.
+
     Approach: render the given points against a deliberately
     oversized, arbitrary xlim so nothing clips, measure where they
     actually land in axes-fraction terms, and back-convert that into
@@ -386,7 +404,7 @@ def compute_skew_corrected_xlim(
     probe_skew = SkewT(
         probe_fig, rotation=45, rect=(0.02, 0.02, 0.96, 0.96)
     )
-    probe_skew.ax.set_aspect("auto")
+
     probe_skew.ax.set_ylim(bottom_pressure, top_pressure)
     probe_skew.ax.set_xlim(provisional_left, provisional_right)
 
@@ -2743,7 +2761,7 @@ def plot_skewt(
         t_min = min(t_min, min(dewpoints))
 
     # Modest, mostly-fixed pressure padding - not tuned for squareness
-    # anymore. A fixed 850 mb ceiling trims how much sky gets shown
+    # anymore. A fixed 880 mb ceiling trims how much sky gets shown
     # above the summit station instead of the proportional padding
     # used for the (since-reverted) square layout; a small safety
     # margin keeps this sane if a station's pressure ever ends up
@@ -2765,27 +2783,57 @@ def plot_skewt(
             skew_points.append((station["wetbulb_C"], station["pressure_hPa"]))
 
     # ==============================================================
-    # SKEW-T BOX SIZE
+    # SKEW-T BOX SIZE - DERIVED FROM THE LOCKED ASPECT
     # ==============================================================
     #
-    # Fixed, and finally trustworthy: MetPy's SkewT locks its axes
-    # aspect (ax.set_aspect(80.5, adjustable='box')) to keep the
-    # skew lines at a geometrically "true" 45 degrees - which is
-    # tuned for a full-troposphere sounding, not this chart's shallow
-    # ~100-150 hPa slice. For that pressure range the lock wants a
-    # short, wide box (measured height:width ratio ~0.29 for this
-    # data), the opposite of what a tall dashboard centerpiece needs.
-    # Rather than fight the lock with probing/derivation, it's
-    # disabled outright below (skew.ax.set_aspect("auto")) - the
-    # skew lines render at whatever angle the box gives them instead
-    # of a strict 45 degrees, which is a minor cosmetic tradeoff for
-    # a compact near-surface chart, not a data-correctness issue.
-    # With the lock gone, these two numbers are simply "how big do
-    # we want the chart" - no more guessing required.
+    # SkewT's aspect lock (ax.set_aspect(80.5, adjustable='box')) is
+    # what keeps the 45-degree skew lines geometrically true - it's
+    # not optional cosmetic behavior, it's part of what makes a
+    # Skew-T a Skew-T. Disabling it corrupts the coordinate math
+    # (confirmed directly - it broke compute_skew_corrected_xlim's
+    # shift-correction, which assumes the transform is affine and
+    # consistent between its probe and the final render).
+    #
+    # For this shallow ~135 hPa near-surface slice, the lock wants a
+    # SHORT, WIDE box (measured height:width ratio ~0.29 for typical
+    # data) - a true-angle Skew-T of a narrow pressure band is
+    # inherently that shape; there's no honest way to make it tall
+    # without either showing a much bigger pressure range or drawing
+    # the skew at the wrong angle. "Big centerpiece" here means WIDE
+    # and prominent, not tall - width is the fixed anchor, height is
+    # derived from a probe, and neither is clamped, since a guessed
+    # clamp is exactly what caused an earlier round of this same bug.
 
-    skew_width_in = 9.5
-    skew_height_in = 6.5
+    TARGET_SKEW_WIDTH_IN = 13.0
 
+    # Rough first-pass xlim just to have something to probe the
+    # aspect with - doesn't need to be the final, precisely-padded
+    # range, only roughly representative. min_width is intentionally
+    # generous (18 C) so that on a typical tightly-clustered day the
+    # temperature axis doesn't collapse to a razor-thin range, which
+    # would make the derived height (and therefore the day-to-day
+    # output size) swing much more than it needs to.
+    rough_left, rough_right = compute_skew_corrected_xlim(
+        bottom_pressure, top_pressure, skew_points,
+        box_width_in=12.0, box_height_in=12.0, min_width=18.0,
+    )
+
+    height_to_width = measure_skewt_height_to_width_ratio(
+        bottom_pressure, top_pressure, rough_left, rough_right,
+    )
+
+    skew_width_in = TARGET_SKEW_WIDTH_IN
+    skew_height_in = skew_width_in * height_to_width
+
+    print(
+        f"[SIZING] height_to_width={height_to_width:.3f}  "
+        f"skew_width_in={skew_width_in:.2f}  "
+        f"skew_height_in={skew_height_in:.2f}"
+    )
+
+    # Final xlim, corrected against the box we're ACTUALLY going to
+    # use - has to match, not just be close (see
+    # compute_skew_corrected_xlim's own docstring).
     left_temperature, right_temperature = compute_skew_corrected_xlim(
         bottom_pressure, top_pressure, skew_points,
         box_width_in=skew_width_in, box_height_in=skew_height_in,
@@ -2796,20 +2844,11 @@ def plot_skewt(
     # FIGURE SIZING
     # ==============================================================
     #
-    # Deliberately FIXED, not derived from the data. Earlier versions
-    # probed the Skew-T's natural (aspect-locked) shape for the
-    # day's specific data and sized the figure to match it exactly.
-    # That produced a genuinely different output size on different
-    # days - some days narrower, some taller - which caused two
-    # separate visible problems on the dashboard: the fixed-length
-    # title text would collide with the date on narrow-width days,
-    # and the image's on-page footprint would visibly change size
-    # ("snap" bigger/smaller) as the underlying data changed, even
-    # though the CSS grid ratio around it never changed. A fixed
-    # figure size trades a little wasted margin on days whose data
-    # doesn't perfectly match this aspect for a stable, predictable
-    # output every time - which matters more for a fixed dashboard
-    # layout than a perfectly tight fit.
+    # header_in/gap1_in/bottom_margin_in/left_margin_in/
+    # right_margin_in/wind_col_in are fixed chrome around the chart;
+    # skew_width_in/skew_height_in (above) are now correctly derived
+    # rather than guessed, so the total figure size below just adds
+    # a small, constant amount of margin on top of them.
 
     wind_col_in = 0.9
     content_gap_in = 0.15
@@ -2850,7 +2889,7 @@ def plot_skewt(
         rotation=45,
         rect=(content_x0, skew_y0, skew_width_frac, skew_height_frac),
     )
-    skew.ax.set_aspect("auto")
+
     skew.ax.set_ylim(bottom_pressure, top_pressure)
     skew.ax.set_xlim(left_temperature, right_temperature)
 
@@ -2879,7 +2918,7 @@ def plot_skewt(
         FixedFormatter([f"{t:.{xtick_decimals}f}" for t in xticks])
     )
 
-    # Round-number pressure gridlines (every 10 hPa) anchored to
+    # Round-number pressure gridlines (every 20 hPa) anchored to
     # KBTV's actual surface pressure.
 
     kbtv_station = next(
@@ -3078,6 +3117,12 @@ def plot_skewt(
     # ==============================================================
     # SAVE
     # ==============================================================
+
+    print(
+        f"[SIZING] final fig_width_in={fig_width_in:.2f}  "
+        f"fig_height_in={fig_height_in:.2f}  "
+        f"aspect={fig_width_in / fig_height_in:.3f}"
+    )
 
     plt.savefig(OUTPUT_FILE, dpi=175)
     plt.close(fig)
