@@ -3224,8 +3224,8 @@ def plot_skewt(
     # rare enough in practice that the output is effectively fixed.
 
     FIXED_BOTTOM_PRESSURE_HPA = 1040.0  # comfortably above any realistic KBTV (330 ft) station pressure
-    FIXED_TOP_PRESSURE_HPA = 880.0      # existing summit-area ceiling
-    FIXED_TEMP_WIDTH_C = 24.0           # comfortably wider than a typical near-surface spread
+    FIXED_TOP_PRESSURE_HPA = 860.0      # existing summit-area ceiling
+    FIXED_TEMP_WIDTH_C = 18.0           # comfortably wider than a typical near-surface spread
 
     bottom_pressure = max(FIXED_BOTTOM_PRESSURE_HPA, p_max + 15.0)
     top_pressure = min(FIXED_TOP_PRESSURE_HPA, p_min - 15.0)
