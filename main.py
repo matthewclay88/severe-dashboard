@@ -57,6 +57,8 @@ drive_service = build("drive", "v3", credentials=creds)
 
 MODELS = ["rap", "hrrr", "nam", "gfs"]
 MAX_FORECAST_HOURS = 60  # cap per model; NAM/GFS otherwise run out to 84-384h
+REPO_OUTPUT_DIR = Path("outputs")
+WIND_PROFILE_TOP_PRES_HPA = 500.0  # well above any realistic critical level
 
 # ============================================================
 # SITE METADATA
@@ -90,6 +92,60 @@ SITE_GHCND = {
 # ============================================================
 # OPEN-METEO SOIL MOISTURE
 # ============================================================
+
+def export_wind_profile_json(sounding, model, site, run, valid_time):
+    """
+    Write the surface-through-500-hPa portion of `sounding` (a BUFKIT
+    dataframe with PRES/HGHT/DRCT/SKNT columns, same raw object
+    calculate_parameters() receives) as a compact JSON wind-profile
+    file. Rows with an obviously-missing SKNT/DRCT sentinel value are
+    dropped rather than exported as garbage.
+    """
+
+    clean = sounding[
+        (sounding["SKNT"] > -900)
+        & (sounding["DRCT"] > -900)
+        & (sounding["PRES"] > 0)
+    ].copy()
+
+    levels = []
+
+    for _, row in clean.iterrows():
+
+        pres = float(row["PRES"])
+
+        if pres < WIND_PROFILE_TOP_PRES_HPA:
+            break
+
+        levels.append({
+            "pressure_hPa": round(pres, 1),
+            "height_m": round(float(row["HGHT"]), 0),
+            "wind_speed_kt": round(float(row["SKNT"]), 1),
+            "wind_dir_deg": round(float(row["DRCT"]), 0),
+        })
+
+    if not levels:
+        print(f"  WARNING: wind profile export for {model.upper()} {site.upper()} produced no levels.")
+        return
+
+    payload = {
+        "model": model.upper(),
+        "site": site.upper(),
+        "run": run,
+        "valid_time": valid_time,
+        "top_pressure_hPa": WIND_PROFILE_TOP_PRES_HPA,
+        "levels": levels,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    REPO_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+    out_path = REPO_OUTPUT_DIR / f"{site.lower()}_rap_wind_profile.json"
+
+    with open(out_path, "w") as f:
+        json.dump(payload, f, indent=2)
+
+    print(f"  Saved wind profile: {out_path} ({len(levels)} levels)")
 
 OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
 
@@ -1966,6 +2022,15 @@ for model in MODELS:
                 columns=["PRES", "TMPC", "TMWC", "DWPC", "THTE", "DRCT", "SKNT", "OMEG", "CFRL", "HGHT"],
             )
 
+            if model == "rap" and site == "kbtv" and hour == 0:
+                try:
+                    export_wind_profile_json(sounding, model, site, rap_run, valid_time)
+                except Exception as e:
+                    print(f"  WARNING: wind profile export failed for {model.upper()} {site.upper()}: {e}")
+
+            try:
+                params = calculate_parameters(sounding)
+            
             try:
                 params = calculate_parameters(sounding)
                 params["MODEL"]      = model.upper()
