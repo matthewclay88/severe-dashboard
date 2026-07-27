@@ -20,7 +20,7 @@
     "Blocked flow (Fr 0.00)",
     "Stable layer, no distinct ridge-top cap",
     "Weak cross-barrier flow at summit (2 kt)",
-    "Disorganized flow (179\u00b0 spread)",
+    "Disorganized flow (146\u00b0 spread)",
     "Critical level aloft (weak wind at 5801 ft, 10 kt)"
   ],
   "mountain_wave_critical_level": {
@@ -31,6 +31,6 @@
     "wind_dir_deg": 168.0,
     "reason": "weak wind"
   },
-  "observed_at": "2026-07-27T05:18:00+00:00",
-  "generated_at": "2026-07-27T05:23:03.592973+00:00"
+  "observed_at": "2026-07-27T05:33:00+00:00",
+  "generated_at": "2026-07-27T05:38:04.331994+00:00"
 }
