@@ -2443,6 +2443,187 @@ def mountain_wave_potential(profile, diagnostics, rap_wind_profile=None):
     }
 
 
+# =====================================================================
+# 11D. RIME ICING POTENTIAL
+# =====================================================================
+#
+# Same pattern as 11C's mountain-wave index: a composite score built
+# from ingredients this profile can actually assess, degrading
+# honestly instead of guessing when something's missing.
+#
+# Rime ice forms when supercooled liquid droplets freeze on contact
+# with an exposed surface - distinct from freezing rain, which
+# classify_precip_type() already handles. Three ingredients matter:
+# temperature in the supercooled-droplet range (roughly -2 C to
+# -20 C - warmer than that nothing freezes, colder than that a lot
+# of the liquid water has already glaciated into ice crystals),
+# moisture/cloud presence (you need actual liquid water around,
+# meaning the summit needs to be at or near saturation), and wind
+# (drives accretion rate - it's specifically why rime grows into
+# wind-pointing "feathers" rather than sitting like calm-air hoar
+# frost).
+#
+# THE REAL LIMITATION: MMNV1 (the actual summit) never reports
+# dewpoint - only temperature and wind, see fetch_mmvn1(). The
+# moisture component below therefore has to use the next station
+# down that DOES have a dewpoint as a proxy for "is the summit
+# sitting in cloud", not a true summit reading. That component is
+# treated as load-bearing: if no station in the profile has moisture
+# data at all, the whole index reports "Indeterminate" rather than a
+# manufactured score, since temperature and wind alone can't confirm
+# there's any liquid water present to freeze in the first place.
+
+RIME_LOW_MAX = 2
+RIME_MODERATE_MAX = 4
+
+RIME_TEMP_PRIME_LOW_C = -20.0
+RIME_TEMP_PRIME_HIGH_C = -2.0
+RIME_TEMP_MARGINAL_LOW_C = -25.0
+
+RIME_RH_SATURATED_PCT = 90.0
+RIME_RH_MOIST_PCT = 75.0
+
+RIME_WIND_STRONG_KT = 25.0
+RIME_WIND_MODERATE_KT = 10.0
+
+
+def uppermost_station_with_dewpoint(profile):
+    """
+    The highest-elevation station in `profile` that has a dewpoint
+    reading, or None if no station has one this run. Searched from
+    the top down since MMNV1 - the actual summit - never reports
+    dewpoint (see fetch_mmvn1()), so the next station down is
+    usually the best available proxy for how moist the air is near
+    the ridge. `profile` is already elevation-sorted ascending, so
+    walking it in reverse starts at the highest station.
+    """
+
+    for station in reversed(profile):
+
+        if station.get("dewpoint_C") is not None:
+            return station
+
+    return None
+
+
+def rime_icing_potential(profile, diagnostics):
+    """
+    Composite Low/Moderate/High rime-icing-potential index for the
+    summit, from three ingredients (0-2 points each, 0-6 total):
+
+        1. Summit temperature in the classic supercooled-droplet
+           range
+        2. Moisture near the top of the profile (see the module
+           comment above for why this is a proxy, not a direct
+           summit reading) - LOAD-BEARING: if unavailable, the
+           whole index reports "Indeterminate"
+        3. Summit wind speed - the accretion-rate driver
+
+    Bucketed Low (0-2) / Moderate (3-4) / High (5-6).
+
+    Treat this index as "how favorable do the ingredients look for
+    icing on exposed summit terrain", not a confirmed observation -
+    it is not a substitute for an actual PIREP, webcam check, or
+    on-mountain report.
+    """
+
+    points = 0
+    reasons = []
+
+    summit = profile[-1]
+
+    # ---------------- 1. Summit temperature range ----------------
+
+    summit_temp = summit.get("temperature_C")
+
+    if summit_temp is None:
+        reasons.append("Summit temperature unavailable")
+    elif RIME_TEMP_PRIME_LOW_C <= summit_temp <= RIME_TEMP_PRIME_HIGH_C:
+        points += 2
+        reasons.append(f"Summit temp in classic rime range ({summit_temp:.1f} C)")
+    elif (
+        RIME_TEMP_MARGINAL_LOW_C <= summit_temp < RIME_TEMP_PRIME_LOW_C
+    ) or (
+        RIME_TEMP_PRIME_HIGH_C < summit_temp <= 0.0
+    ):
+        points += 1
+        reasons.append(f"Summit temp marginal for rime ({summit_temp:.1f} C)")
+    else:
+        reasons.append(f"Summit temp outside rime range ({summit_temp:.1f} C)")
+
+    # ---------------- 2. Moisture near the top ----------------
+
+    moisture_station = uppermost_station_with_dewpoint(profile)
+
+    rh = (
+        moisture_station.get("relative_humidity_pct")
+        if moisture_station is not None
+        else None
+    )
+
+    if moisture_station is None or rh is None:
+        reasons.append("No dewpoint data available near ridge-top")
+    elif rh >= RIME_RH_SATURATED_PCT:
+        points += 2
+        reasons.append(
+            f"Near-saturated air at {moisture_station['stid']} "
+            f"({rh:.0f}% RH, {moisture_station['elevation_ft']:.0f} ft)"
+        )
+    elif rh >= RIME_RH_MOIST_PCT:
+        points += 1
+        reasons.append(
+            f"Moist air at {moisture_station['stid']} "
+            f"({rh:.0f}% RH, {moisture_station['elevation_ft']:.0f} ft)"
+        )
+    else:
+        reasons.append(
+            f"Dry air at {moisture_station['stid']} "
+            f"({rh:.0f}% RH, {moisture_station['elevation_ft']:.0f} ft)"
+        )
+
+    # ---------------- 3. Summit wind speed ----------------
+
+    summit_wind_kmh = summit.get("wind_speed_kmh")
+
+    if summit_wind_kmh is None:
+        reasons.append("Summit wind unavailable")
+    else:
+
+        summit_wind_kt = (
+            summit_wind_kmh * units("km/hour")
+        ).to("knots").m
+
+        if summit_wind_kt >= RIME_WIND_STRONG_KT:
+            points += 2
+            reasons.append(
+                f"Strong summit wind ({summit_wind_kt:.0f} kt) - rapid accretion"
+            )
+        elif summit_wind_kt >= RIME_WIND_MODERATE_KT:
+            points += 1
+            reasons.append(f"Moderate summit wind ({summit_wind_kt:.0f} kt)")
+        else:
+            reasons.append(f"Light summit wind ({summit_wind_kt:.0f} kt)")
+
+    # ---------------- Bucket ----------------
+
+    if moisture_station is None or rh is None:
+        category = "Indeterminate"
+    elif points <= RIME_LOW_MAX:
+        category = "Low"
+    elif points <= RIME_MODERATE_MAX:
+        category = "Moderate"
+    else:
+        category = "High"
+
+    return {
+        "score": points,
+        "max_score": 6,
+        "category": category,
+        "reasons": reasons,
+    }
+
+
+
 def layer_lapse_rates(profile):
     """
     Lapse rate (C/km, positive = cooling with height) of the layer
@@ -2757,6 +2938,13 @@ def build_diagnostics(profile, rap_wind_profile=None):
 
     diagnostics["mountain_wave"] = mountain_wave_potential(profile, diagnostics, rap_wind_profile)
 
+    # ---------------- RIME ICING POTENTIAL ----------------
+    #
+    # Fully self-contained from the observed profile - unlike
+    # mountain_wave above, this needs no RAP/network data.
+
+    diagnostics["rime_icing"] = rime_icing_potential(profile, diagnostics)
+
     return diagnostics
     
 def diagnostic_display_rows(diagnostics):
@@ -2820,6 +3008,17 @@ def diagnostic_display_rows(diagnostics):
     ]
 
     for reason in diagnostics["mountain_wave"]["reasons"]:
+        rows.append((f"  - {reason}", "", False))
+
+    rows.append(("RIME ICING", "", True))
+    rows.append((
+        "Icing Potential",
+        f"{diagnostics['rime_icing']['category']} "
+        f"({diagnostics['rime_icing']['score']}/{diagnostics['rime_icing']['max_score']})",
+        False,
+    ))
+
+    for reason in diagnostics["rime_icing"]["reasons"]:
         rows.append((f"  - {reason}", "", False))
 
     return rows
@@ -3224,8 +3423,8 @@ def plot_skewt(
     # rare enough in practice that the output is effectively fixed.
 
     FIXED_BOTTOM_PRESSURE_HPA = 1040.0  # comfortably above any realistic KBTV (330 ft) station pressure
-    FIXED_TOP_PRESSURE_HPA = 860.0      # existing summit-area ceiling
-    FIXED_TEMP_WIDTH_C = 18.0           # comfortably wider than a typical near-surface spread
+    FIXED_TOP_PRESSURE_HPA = 860.0      # tightened from 880 so it actually binds instead of getting overridden by a typical day's data
+    FIXED_TEMP_WIDTH_C = 18.0           # narrower floor for a taller chart - height is derived from width, so this trades some x-axis padding for more vertical inches
 
     bottom_pressure = max(FIXED_BOTTOM_PRESSURE_HPA, p_max + 15.0)
     top_pressure = min(FIXED_TOP_PRESSURE_HPA, p_min - 15.0)
@@ -3503,28 +3702,35 @@ def plot_skewt(
     )
 
     # ==============================================================
-    # MOUNTAIN WAVE POTENTIAL (annotation box, upper-right of chart)
+    # SUMMARY BOXES (mountain wave + rime icing, upper-right of chart)
     # ==============================================================
     #
     # Placed inside skew.ax's own upper-right corner - the legend
     # already claims upper-left, and there's reliably open gridded
     # space above the profile on a chart this wide. Background patch
     # drawn first, then text layered on top - same pattern
-    # _draw_diagnostic_cards uses elsewhere in this file, just for a
-    # single small box instead of a shared multi-card band.
+    # _draw_diagnostic_cards uses elsewhere in this file, just for
+    # small individual boxes instead of a shared multi-card band.
+    # Stacked vertically since both are compact meteorological
+    # summaries that belong in the same corner.
+
+    category_colors = {
+        "Low": "#2f9e44",
+        "Moderate": "#d9822b",
+        "High": "#e03131",
+        "Indeterminate": MUTED_TEXT,
+    }
+
+    box_left = 0.595
+    box_width = 0.375
+    box_height = 0.205
+    box_gap = 0.02
 
     wave = diagnostics.get("mountain_wave")
 
     if wave is not None:
 
-        wave_category_colors = {
-            "Low": "#2f9e44",
-            "Moderate": "#d9822b",
-            "High": "#e03131",
-            "Indeterminate": MUTED_TEXT,
-        }
-
-        wave_color = wave_category_colors.get(wave["category"], MUTED_TEXT)
+        wave_color = category_colors.get(wave["category"], MUTED_TEXT)
 
         critical_level = wave.get("critical_level")
 
@@ -3536,12 +3742,11 @@ def plot_skewt(
         else:
             wave_detail = "No critical level in RAP profile"
 
-        box_left, box_bottom = 0.595, 0.775
-        box_width, box_height = 0.375, 0.205
+        wave_box_bottom = 0.775
 
         skew.ax.add_patch(
             FancyBboxPatch(
-                (box_left, box_bottom), box_width, box_height,
+                (box_left, wave_box_bottom), box_width, box_height,
                 boxstyle="round,pad=0.01,rounding_size=0.02",
                 transform=skew.ax.transAxes,
                 linewidth=1.0,
@@ -3553,7 +3758,7 @@ def plot_skewt(
         )
 
         skew.ax.text(
-            box_left + box_width - 0.02, box_bottom + box_height - 0.035,
+            box_left + box_width - 0.02, wave_box_bottom + box_height - 0.035,
             "MOUNTAIN WAVE POTENTIAL",
             transform=skew.ax.transAxes,
             fontsize=8, fontweight="bold", color=MUTED_TEXT,
@@ -3561,7 +3766,7 @@ def plot_skewt(
         )
 
         skew.ax.text(
-            box_left + box_width - 0.02, box_bottom + box_height - 0.085,
+            box_left + box_width - 0.02, wave_box_bottom + box_height - 0.085,
             f"{wave['category']}  ({wave['score']}/{wave['max_score']})",
             transform=skew.ax.transAxes,
             fontsize=13, fontweight="bold", color=wave_color,
@@ -3569,8 +3774,60 @@ def plot_skewt(
         )
 
         skew.ax.text(
-            box_left + box_width - 0.02, box_bottom + box_height - 0.145,
+            box_left + box_width - 0.02, wave_box_bottom + box_height - 0.145,
             wave_detail,
+            transform=skew.ax.transAxes,
+            fontsize=7.5, color=MUTED_TEXT,
+            ha="right", va="top", zorder=20,
+        )
+
+    rime = diagnostics.get("rime_icing")
+
+    if rime is not None:
+
+        rime_color = category_colors.get(rime["category"], MUTED_TEXT)
+
+        # Lead with the moisture reason (component 2) rather than
+        # the first reason in the list - it's the load-bearing
+        # ingredient (see rime_icing_potential's docstring), so it's
+        # the most useful single line to show when space only
+        # allows one.
+        rime_detail = rime["reasons"][1] if len(rime["reasons"]) > 1 else ""
+
+        rime_box_bottom = wave_box_bottom - box_height - box_gap if wave is not None else 0.775
+
+        skew.ax.add_patch(
+            FancyBboxPatch(
+                (box_left, rime_box_bottom), box_width, box_height,
+                boxstyle="round,pad=0.01,rounding_size=0.02",
+                transform=skew.ax.transAxes,
+                linewidth=1.0,
+                edgecolor=DIVIDER_COLOR,
+                facecolor="white",
+                alpha=0.92,
+                zorder=19,
+            )
+        )
+
+        skew.ax.text(
+            box_left + box_width - 0.02, rime_box_bottom + box_height - 0.035,
+            "RIME ICING POTENTIAL",
+            transform=skew.ax.transAxes,
+            fontsize=8, fontweight="bold", color=MUTED_TEXT,
+            ha="right", va="top", zorder=20,
+        )
+
+        skew.ax.text(
+            box_left + box_width - 0.02, rime_box_bottom + box_height - 0.085,
+            f"{rime['category']}  ({rime['score']}/{rime['max_score']})",
+            transform=skew.ax.transAxes,
+            fontsize=13, fontweight="bold", color=rime_color,
+            ha="right", va="top", zorder=20,
+        )
+
+        skew.ax.text(
+            box_left + box_width - 0.02, rime_box_bottom + box_height - 0.145,
+            rime_detail,
             transform=skew.ax.transAxes,
             fontsize=7.5, color=MUTED_TEXT,
             ha="right", va="top", zorder=20,
@@ -4204,6 +4461,10 @@ def export_diagnostics_status(diagnostics, profile):
         "mountain_wave_max_score": diagnostics["mountain_wave"]["max_score"],
         "mountain_wave_reasons": diagnostics["mountain_wave"]["reasons"],
         "mountain_wave_critical_level": diagnostics["mountain_wave"]["critical_level"],
+        "rime_icing_category": diagnostics["rime_icing"]["category"],
+        "rime_icing_score": diagnostics["rime_icing"]["score"],
+        "rime_icing_max_score": diagnostics["rime_icing"]["max_score"],
+        "rime_icing_reasons": diagnostics["rime_icing"]["reasons"],
         "observed_at": max(latest_times).isoformat() if latest_times else None,
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
