@@ -3503,6 +3503,80 @@ def plot_skewt(
     )
 
     # ==============================================================
+    # MOUNTAIN WAVE POTENTIAL (annotation box, upper-right of chart)
+    # ==============================================================
+    #
+    # Placed inside skew.ax's own upper-right corner - the legend
+    # already claims upper-left, and there's reliably open gridded
+    # space above the profile on a chart this wide. Background patch
+    # drawn first, then text layered on top - same pattern
+    # _draw_diagnostic_cards uses elsewhere in this file, just for a
+    # single small box instead of a shared multi-card band.
+
+    wave = diagnostics.get("mountain_wave")
+
+    if wave is not None:
+
+        wave_category_colors = {
+            "Low": "#2f9e44",
+            "Moderate": "#d9822b",
+            "High": "#e03131",
+            "Indeterminate": MUTED_TEXT,
+        }
+
+        wave_color = wave_category_colors.get(wave["category"], MUTED_TEXT)
+
+        critical_level = wave.get("critical_level")
+
+        if critical_level is not None:
+            wave_detail = (
+                f"Critical level: {critical_level['height_ft']:.0f} ft "
+                f"({critical_level['reason']})"
+            )
+        else:
+            wave_detail = "No critical level in RAP profile"
+
+        box_left, box_bottom = 0.595, 0.775
+        box_width, box_height = 0.375, 0.205
+
+        skew.ax.add_patch(
+            FancyBboxPatch(
+                (box_left, box_bottom), box_width, box_height,
+                boxstyle="round,pad=0.01,rounding_size=0.02",
+                transform=skew.ax.transAxes,
+                linewidth=1.0,
+                edgecolor=DIVIDER_COLOR,
+                facecolor="white",
+                alpha=0.92,
+                zorder=19,
+            )
+        )
+
+        skew.ax.text(
+            box_left + box_width - 0.02, box_bottom + box_height - 0.035,
+            "MOUNTAIN WAVE POTENTIAL",
+            transform=skew.ax.transAxes,
+            fontsize=8, fontweight="bold", color=MUTED_TEXT,
+            ha="right", va="top", zorder=20,
+        )
+
+        skew.ax.text(
+            box_left + box_width - 0.02, box_bottom + box_height - 0.085,
+            f"{wave['category']}  ({wave['score']}/{wave['max_score']})",
+            transform=skew.ax.transAxes,
+            fontsize=13, fontweight="bold", color=wave_color,
+            ha="right", va="top", zorder=20,
+        )
+
+        skew.ax.text(
+            box_left + box_width - 0.02, box_bottom + box_height - 0.145,
+            wave_detail,
+            transform=skew.ax.transAxes,
+            fontsize=7.5, color=MUTED_TEXT,
+            ha="right", va="top", zorder=20,
+        )
+
+    # ==============================================================
     # WIND COLUMN (separate axes, plain upright barbs)
     # ==============================================================
 
