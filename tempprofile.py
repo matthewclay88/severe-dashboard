@@ -239,6 +239,31 @@ def observation_age_minutes(timestamp):
     return (now - dt).total_seconds() / 60.0
 
 
+# Any single field (temperature, dewpoint, or wind) older than this
+# is treated as unusable - a station's WIND reading being 200+
+# minutes stale while its TEMPERATURE is fresh (or vice versa) is a
+# real thing that happens with these feeds, so this is checked per
+# field in build_profile(), not once per station.
+MAX_OBSERVATION_AGE_MINUTES = 100
+
+
+def is_stale(timestamp, max_age_minutes=MAX_OBSERVATION_AGE_MINUTES):
+    """
+    True if `timestamp` is older than `max_age_minutes`, using the
+    same age calculation as observation_age_minutes(). A missing
+    timestamp is NOT itself treated as stale - a value with no
+    timestamp attached is a separate "we don't know how old this is"
+    situation, handled wherever that value gets used, not here.
+    """
+
+    age = observation_age_minutes(timestamp)
+
+    if age is None:
+        return False
+
+    return age > max_age_minutes
+
+
 def fmt(value, decimals=1):
     """
     Safe formatting helper.
@@ -1184,7 +1209,13 @@ def build_profile(observations):
     Convert normalized observations into an elevation-sorted profile.
 
     Temperature is required for a station to enter the thermal profile.
-    Dewpoint and wind are optional.
+    Dewpoint and wind are optional. Any field older than
+    MAX_OBSERVATION_AGE_MINUTES is dropped before the station is
+    built - a stale TEMPERATURE is treated the same as a missing one
+    (station skipped), while a stale DEWPOINT or WIND just nulls out
+    that one field, since a station can easily have one fresh field
+    and one stale one, and dropping the whole station over a single
+    stale field would throw away otherwise-good data.
     """
 
     profile = []
@@ -1206,6 +1237,21 @@ def build_profile(observations):
             "temperature_C"
         )
 
+        temperature_time = obs.get(
+            "temperature_time"
+        )
+
+        if temperature is not None and is_stale(temperature_time):
+
+            print(
+                f"Skipping {stid}: "
+                f"temperature is "
+                f"{observation_age_minutes(temperature_time):.0f} min old "
+                f"(over {MAX_OBSERVATION_AGE_MINUTES:.0f} min limit)."
+            )
+
+            temperature = None
+
         if temperature is None:
 
             print(
@@ -1214,6 +1260,48 @@ def build_profile(observations):
             )
 
             continue
+
+        dewpoint = obs.get(
+            "dewpoint_C"
+        )
+
+        dewpoint_time = obs.get(
+            "dewpoint_time"
+        )
+
+        if dewpoint is not None and is_stale(dewpoint_time):
+
+            print(
+                f"  {stid}: dropping stale dewpoint "
+                f"({observation_age_minutes(dewpoint_time):.0f} min old)."
+            )
+
+            dewpoint = None
+
+        wind_speed = obs.get(
+            "wind_speed_kmh"
+        )
+
+        wind_direction = obs.get(
+            "wind_direction_deg"
+        )
+
+        wind_time = obs.get(
+            "wind_time"
+        )
+
+        if (
+            (wind_speed is not None or wind_direction is not None)
+            and is_stale(wind_time)
+        ):
+
+            print(
+                f"  {stid}: dropping stale wind "
+                f"({observation_age_minutes(wind_time):.0f} min old)."
+            )
+
+            wind_speed = None
+            wind_direction = None
 
         profile.append({
             "stid": stid,
@@ -1224,22 +1312,22 @@ def build_profile(observations):
                 temperature,
 
             "temperature_time":
-                obs.get("temperature_time"),
+                temperature_time,
 
             "dewpoint_C":
-                obs.get("dewpoint_C"),
+                dewpoint,
 
             "dewpoint_time":
-                obs.get("dewpoint_time"),
+                dewpoint_time,
 
             "wind_speed_kmh":
-                obs.get("wind_speed_kmh"),
+                wind_speed,
 
             "wind_direction_deg":
-                obs.get("wind_direction_deg"),
+                wind_direction,
 
             "wind_time":
-                obs.get("wind_time"),
+                wind_time,
 
             "barometric_pressure_Pa":
                 obs.get(
@@ -3721,10 +3809,10 @@ def plot_skewt(
         "Indeterminate": MUTED_TEXT,
     }
 
-    box_left = 0.595
-    box_width = 0.375
-    box_height = 0.205
-    box_gap = 0.02
+    box_left = 0.66
+    box_width = 0.31
+    box_height = 0.12
+    box_gap = 0.012
 
     wave = diagnostics.get("mountain_wave")
 
@@ -3742,12 +3830,12 @@ def plot_skewt(
         else:
             wave_detail = "No critical level in RAP profile"
 
-        wave_box_bottom = 0.775
+        wave_box_bottom = 0.86
 
         skew.ax.add_patch(
             FancyBboxPatch(
                 (box_left, wave_box_bottom), box_width, box_height,
-                boxstyle="round,pad=0.01,rounding_size=0.02",
+                boxstyle="round,pad=0.01,rounding_size=0.015",
                 transform=skew.ax.transAxes,
                 linewidth=1.0,
                 edgecolor=DIVIDER_COLOR,
@@ -3758,26 +3846,26 @@ def plot_skewt(
         )
 
         skew.ax.text(
-            box_left + box_width - 0.02, wave_box_bottom + box_height - 0.035,
+            box_left + box_width - 0.014, wave_box_bottom + box_height - 0.022,
             "MOUNTAIN WAVE POTENTIAL",
             transform=skew.ax.transAxes,
-            fontsize=8, fontweight="bold", color=MUTED_TEXT,
+            fontsize=6.5, fontweight="bold", color=MUTED_TEXT,
             ha="right", va="top", zorder=20,
         )
 
         skew.ax.text(
-            box_left + box_width - 0.02, wave_box_bottom + box_height - 0.085,
+            box_left + box_width - 0.014, wave_box_bottom + box_height - 0.055,
             f"{wave['category']}  ({wave['score']}/{wave['max_score']})",
             transform=skew.ax.transAxes,
-            fontsize=13, fontweight="bold", color=wave_color,
+            fontsize=10.5, fontweight="bold", color=wave_color,
             ha="right", va="top", zorder=20,
         )
 
         skew.ax.text(
-            box_left + box_width - 0.02, wave_box_bottom + box_height - 0.145,
+            box_left + box_width - 0.014, wave_box_bottom + box_height - 0.093,
             wave_detail,
             transform=skew.ax.transAxes,
-            fontsize=7.5, color=MUTED_TEXT,
+            fontsize=6, color=MUTED_TEXT,
             ha="right", va="top", zorder=20,
         )
 
@@ -3794,12 +3882,12 @@ def plot_skewt(
         # allows one.
         rime_detail = rime["reasons"][1] if len(rime["reasons"]) > 1 else ""
 
-        rime_box_bottom = wave_box_bottom - box_height - box_gap if wave is not None else 0.775
+        rime_box_bottom = wave_box_bottom - box_height - box_gap if wave is not None else 0.86
 
         skew.ax.add_patch(
             FancyBboxPatch(
                 (box_left, rime_box_bottom), box_width, box_height,
-                boxstyle="round,pad=0.01,rounding_size=0.02",
+                boxstyle="round,pad=0.01,rounding_size=0.015",
                 transform=skew.ax.transAxes,
                 linewidth=1.0,
                 edgecolor=DIVIDER_COLOR,
@@ -3810,26 +3898,26 @@ def plot_skewt(
         )
 
         skew.ax.text(
-            box_left + box_width - 0.02, rime_box_bottom + box_height - 0.035,
+            box_left + box_width - 0.014, rime_box_bottom + box_height - 0.022,
             "RIME ICING POTENTIAL",
             transform=skew.ax.transAxes,
-            fontsize=8, fontweight="bold", color=MUTED_TEXT,
+            fontsize=6.5, fontweight="bold", color=MUTED_TEXT,
             ha="right", va="top", zorder=20,
         )
 
         skew.ax.text(
-            box_left + box_width - 0.02, rime_box_bottom + box_height - 0.085,
+            box_left + box_width - 0.014, rime_box_bottom + box_height - 0.055,
             f"{rime['category']}  ({rime['score']}/{rime['max_score']})",
             transform=skew.ax.transAxes,
-            fontsize=13, fontweight="bold", color=rime_color,
+            fontsize=10.5, fontweight="bold", color=rime_color,
             ha="right", va="top", zorder=20,
         )
 
         skew.ax.text(
-            box_left + box_width - 0.02, rime_box_bottom + box_height - 0.145,
+            box_left + box_width - 0.014, rime_box_bottom + box_height - 0.093,
             rime_detail,
             transform=skew.ax.transAxes,
-            fontsize=7.5, color=MUTED_TEXT,
+            fontsize=6, color=MUTED_TEXT,
             ha="right", va="top", zorder=20,
         )
 
