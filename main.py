@@ -2027,9 +2027,6 @@ for model in MODELS:
                     export_wind_profile_json(sounding, model, site, rap_run, valid_time)
                 except Exception as e:
                     print(f"  WARNING: wind profile export failed for {model.upper()} {site.upper()}: {e}")
-
-            try:
-                params = calculate_parameters(sounding)
             
             try:
                 params = calculate_parameters(sounding)
