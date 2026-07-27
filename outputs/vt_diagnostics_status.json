@@ -1,7 +1,7 @@
 {
   "precip_type": "Rain",
   "precip_type_raw": "All Rain",
-  "froude_number": 0.08,
+  "froude_number": 0.13,
   "flow_regime": "Blocked",
   "freezing_level_ft": null,
   "freezing_level_status": "above_layer",
@@ -11,8 +11,8 @@
   "wet_bulb_zero_status": "above_layer",
   "wet_bulb_lower_crossing_ft": null,
   "wet_bulb_upper_crossing_ft": null,
-  "mean_lapse_rate_C_km": 8.9,
-  "bulk_shear_kt": 7.0,
-  "observed_at": "2026-07-27T01:03:00+00:00",
-  "generated_at": "2026-07-27T01:15:31.530441+00:00"
+  "mean_lapse_rate_C_km": 7.9,
+  "bulk_shear_kt": 8.0,
+  "observed_at": "2026-07-27T01:20:00+00:00",
+  "generated_at": "2026-07-27T01:30:00.677294+00:00"
 }
