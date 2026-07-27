@@ -11,7 +11,7 @@
   "wet_bulb_zero_status": "above_layer",
   "wet_bulb_lower_crossing_ft": null,
   "wet_bulb_upper_crossing_ft": null,
-  "mean_lapse_rate_C_km": 9.1,
+  "mean_lapse_rate_C_km": 10.4,
   "bulk_shear_kt": null,
   "mountain_wave_category": "Indeterminate",
   "mountain_wave_score": 2,
@@ -32,6 +32,6 @@
     "Moist air at UVM06 (80% RH, 2877 ft)",
     "Light summit wind (1 kt)"
   ],
-  "observed_at": "2026-07-27T13:35:00+00:00",
-  "generated_at": "2026-07-27T14:07:56.004787+00:00"
+  "observed_at": "2026-07-27T14:05:00+00:00",
+  "generated_at": "2026-07-27T14:22:50.862687+00:00"
 }
