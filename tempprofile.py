@@ -3793,14 +3793,19 @@ def plot_skewt(
     # SUMMARY BOXES (mountain wave + rime icing, upper-right of chart)
     # ==============================================================
     #
-    # Placed inside skew.ax's own upper-right corner - the legend
-    # already claims upper-left, and there's reliably open gridded
-    # space above the profile on a chart this wide. Background patch
-    # drawn first, then text layered on top - same pattern
-    # _draw_diagnostic_cards uses elsewhere in this file, just for
-    # small individual boxes instead of a shared multi-card band.
-    # Stacked vertically since both are compact meteorological
-    # summaries that belong in the same corner.
+    # Anchored by their RIGHT edge in the chart's upper-right corner
+    # - the legend already claims upper-left, and there's reliably
+    # open gridded space here on a chart this wide. Box WIDTH is not
+    # guessed: text is placed first, then fig.canvas.draw() forces a
+    # real render so each line's actual pixel width can be measured
+    # via get_window_extent() and converted back to axes-fraction
+    # units - same probe-then-measure approach
+    # compute_skew_corrected_xlim uses elsewhere in this file, just
+    # measuring rendered text instead of data-point positions. A
+    # fixed guessed width either leaves blank space (too wide) or
+    # clips text (too narrow); this makes the box hug whichever line
+    # is actually longest, so it never covers more of the profile
+    # than the content genuinely needs.
 
     category_colors = {
         "Low": "#2f9e44",
@@ -3809,12 +3814,17 @@ def plot_skewt(
         "Indeterminate": MUTED_TEXT,
     }
 
-    box_left = 0.66
-    box_width = 0.31
+    box_right = 0.985
+    box_top = 0.98
     box_height = 0.12
     box_gap = 0.012
+    box_pad = 0.014  # inset between the text and the box's own edge
 
     wave = diagnostics.get("mountain_wave")
+    rime = diagnostics.get("rime_icing")
+
+    wave_texts = []
+    rime_texts = []
 
     if wave is not None:
 
@@ -3830,46 +3840,31 @@ def plot_skewt(
         else:
             wave_detail = "No critical level in RAP profile"
 
-        wave_box_bottom = 0.86
-
-        skew.ax.add_patch(
-            FancyBboxPatch(
-                (box_left, wave_box_bottom), box_width, box_height,
-                boxstyle="round,pad=0.01,rounding_size=0.015",
+        wave_texts = [
+            skew.ax.text(
+                box_right - box_pad, box_top - 0.022,
+                "MOUNTAIN WAVE POTENTIAL",
                 transform=skew.ax.transAxes,
-                linewidth=1.0,
-                edgecolor=DIVIDER_COLOR,
-                facecolor="white",
-                alpha=0.92,
-                zorder=19,
-            )
-        )
+                fontsize=6.5, fontweight="bold", color=MUTED_TEXT,
+                ha="right", va="top", zorder=20,
+            ),
+            skew.ax.text(
+                box_right - box_pad, box_top - 0.055,
+                f"{wave['category']}  ({wave['score']}/{wave['max_score']})",
+                transform=skew.ax.transAxes,
+                fontsize=10.5, fontweight="bold", color=wave_color,
+                ha="right", va="top", zorder=20,
+            ),
+            skew.ax.text(
+                box_right - box_pad, box_top - 0.093,
+                wave_detail,
+                transform=skew.ax.transAxes,
+                fontsize=6, color=MUTED_TEXT,
+                ha="right", va="top", zorder=20,
+            ),
+        ]
 
-        skew.ax.text(
-            box_left + box_width - 0.014, wave_box_bottom + box_height - 0.022,
-            "MOUNTAIN WAVE POTENTIAL",
-            transform=skew.ax.transAxes,
-            fontsize=6.5, fontweight="bold", color=MUTED_TEXT,
-            ha="right", va="top", zorder=20,
-        )
-
-        skew.ax.text(
-            box_left + box_width - 0.014, wave_box_bottom + box_height - 0.055,
-            f"{wave['category']}  ({wave['score']}/{wave['max_score']})",
-            transform=skew.ax.transAxes,
-            fontsize=10.5, fontweight="bold", color=wave_color,
-            ha="right", va="top", zorder=20,
-        )
-
-        skew.ax.text(
-            box_left + box_width - 0.014, wave_box_bottom + box_height - 0.093,
-            wave_detail,
-            transform=skew.ax.transAxes,
-            fontsize=6, color=MUTED_TEXT,
-            ha="right", va="top", zorder=20,
-        )
-
-    rime = diagnostics.get("rime_icing")
+    rime_box_top = (box_top - box_height - box_gap) if wave is not None else box_top
 
     if rime is not None:
 
@@ -3882,44 +3877,85 @@ def plot_skewt(
         # allows one.
         rime_detail = rime["reasons"][1] if len(rime["reasons"]) > 1 else ""
 
-        rime_box_bottom = wave_box_bottom - box_height - box_gap if wave is not None else 0.86
-
-        skew.ax.add_patch(
-            FancyBboxPatch(
-                (box_left, rime_box_bottom), box_width, box_height,
-                boxstyle="round,pad=0.01,rounding_size=0.015",
+        rime_texts = [
+            skew.ax.text(
+                box_right - box_pad, rime_box_top - 0.022,
+                "RIME ICING POTENTIAL",
                 transform=skew.ax.transAxes,
-                linewidth=1.0,
-                edgecolor=DIVIDER_COLOR,
-                facecolor="white",
-                alpha=0.92,
-                zorder=19,
+                fontsize=6.5, fontweight="bold", color=MUTED_TEXT,
+                ha="right", va="top", zorder=20,
+            ),
+            skew.ax.text(
+                box_right - box_pad, rime_box_top - 0.055,
+                f"{rime['category']}  ({rime['score']}/{rime['max_score']})",
+                transform=skew.ax.transAxes,
+                fontsize=10.5, fontweight="bold", color=rime_color,
+                ha="right", va="top", zorder=20,
+            ),
+            skew.ax.text(
+                box_right - box_pad, rime_box_top - 0.093,
+                rime_detail,
+                transform=skew.ax.transAxes,
+                fontsize=6, color=MUTED_TEXT,
+                ha="right", va="top", zorder=20,
+            ),
+        ]
+
+    # Force a real render so the text objects above have actual
+    # pixel extents to measure - matplotlib can't report layout
+    # sizes for text that's never been drawn.
+
+    if wave_texts or rime_texts:
+
+        fig.canvas.draw()
+        renderer = fig.canvas.get_renderer()
+
+        ax_width_px = skew.ax.get_window_extent(renderer=renderer).width
+
+        def widest_line_axes_fraction(text_objs):
+
+            widest_px = max(
+                t.get_window_extent(renderer=renderer).width
+                for t in text_objs
             )
-        )
 
-        skew.ax.text(
-            box_left + box_width - 0.014, rime_box_bottom + box_height - 0.022,
-            "RIME ICING POTENTIAL",
-            transform=skew.ax.transAxes,
-            fontsize=6.5, fontweight="bold", color=MUTED_TEXT,
-            ha="right", va="top", zorder=20,
-        )
+            return widest_px / ax_width_px
 
-        skew.ax.text(
-            box_left + box_width - 0.014, rime_box_bottom + box_height - 0.055,
-            f"{rime['category']}  ({rime['score']}/{rime['max_score']})",
-            transform=skew.ax.transAxes,
-            fontsize=10.5, fontweight="bold", color=rime_color,
-            ha="right", va="top", zorder=20,
-        )
+        if wave_texts:
 
-        skew.ax.text(
-            box_left + box_width - 0.014, rime_box_bottom + box_height - 0.093,
-            rime_detail,
-            transform=skew.ax.transAxes,
-            fontsize=6, color=MUTED_TEXT,
-            ha="right", va="top", zorder=20,
-        )
+            wave_box_width = widest_line_axes_fraction(wave_texts) + 2 * box_pad
+            wave_box_left = box_right - wave_box_width
+
+            skew.ax.add_patch(
+                FancyBboxPatch(
+                    (wave_box_left, box_top - box_height), wave_box_width, box_height,
+                    boxstyle="round,pad=0.01,rounding_size=0.015",
+                    transform=skew.ax.transAxes,
+                    linewidth=1.0,
+                    edgecolor=DIVIDER_COLOR,
+                    facecolor="white",
+                    alpha=0.92,
+                    zorder=19,
+                )
+            )
+
+        if rime_texts:
+
+            rime_box_width = widest_line_axes_fraction(rime_texts) + 2 * box_pad
+            rime_box_left = box_right - rime_box_width
+
+            skew.ax.add_patch(
+                FancyBboxPatch(
+                    (rime_box_left, rime_box_top - box_height), rime_box_width, box_height,
+                    boxstyle="round,pad=0.01,rounding_size=0.015",
+                    transform=skew.ax.transAxes,
+                    linewidth=1.0,
+                    edgecolor=DIVIDER_COLOR,
+                    facecolor="white",
+                    alpha=0.92,
+                    zorder=19,
+                )
+            )
 
     # ==============================================================
     # WIND COLUMN (separate axes, plain upright barbs)

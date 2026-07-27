@@ -21,14 +21,14 @@
     "Stable layer, no distinct ridge-top cap",
     "Weak cross-barrier flow at summit (2 kt)",
     "Disorganized flow (135\u00b0 spread)",
-    "Critical level aloft (weak wind at 4731 ft, 5 kt)"
+    "Critical level aloft (weak wind at 4731 ft, 3 kt)"
   ],
   "mountain_wave_critical_level": {
     "height_m": 1442.0,
     "height_ft": 4730.971128608923,
-    "pressure_hPa": 852.4,
-    "wind_speed_kt": 5.0,
-    "wind_dir_deg": 225.0,
+    "pressure_hPa": 852.9,
+    "wind_speed_kt": 3.3,
+    "wind_dir_deg": 216.0,
     "reason": "weak wind"
   },
   "rime_icing_category": "Low",
@@ -40,5 +40,5 @@
     "Light summit wind (6 kt)"
   ],
   "observed_at": "2026-07-27T10:48:00+00:00",
-  "generated_at": "2026-07-27T10:51:39.327626+00:00"
+  "generated_at": "2026-07-27T10:56:05.095567+00:00"
 }
