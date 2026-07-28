@@ -20,7 +20,7 @@
     "Blocked flow (Fr 0.06)",
     "Capping inversion near ridge-top (+0.7 C at 3891 ft)",
     "Weak cross-barrier flow at summit (13 kt)",
-    "Disorganized flow (125\u00b0 spread)",
+    "Disorganized flow (176\u00b0 spread)",
     "No critical level within 3000 m above ridge (RAP)"
   ],
   "mountain_wave_critical_level": null,
@@ -32,6 +32,6 @@
     "Moist air at UVM06 (85% RH, 2877 ft)",
     "Moderate summit wind (13 kt)"
   ],
-  "observed_at": "2026-07-28T15:48:00+00:00",
-  "generated_at": "2026-07-28T15:52:31.878939+00:00"
+  "observed_at": "2026-07-28T15:50:00+00:00",
+  "generated_at": "2026-07-28T16:07:14.115138+00:00"
 }
