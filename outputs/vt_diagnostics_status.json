@@ -20,7 +20,7 @@
     "Blocked flow (Fr 0.08)",
     "Stable layer, no distinct ridge-top cap",
     "Weak cross-barrier flow at summit (9 kt)",
-    "Disorganized flow (154\u00b0 spread)",
+    "Disorganized flow (177\u00b0 spread)",
     "No critical level within 3000 m above ridge (RAP)"
   ],
   "mountain_wave_critical_level": null,
@@ -32,6 +32,6 @@
     "Near-saturated air at UVM06 (99% RH, 2877 ft)",
     "Moderate summit wind (10 kt)"
   ],
-  "observed_at": "2026-07-29T01:33:00+00:00",
-  "generated_at": "2026-07-29T01:44:41.085549+00:00"
+  "observed_at": "2026-07-29T01:48:00+00:00",
+  "generated_at": "2026-07-29T01:59:44.969907+00:00"
 }
