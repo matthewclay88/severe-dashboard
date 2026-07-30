@@ -1,8 +1,8 @@
 {
   "precip_type": "Rain",
   "precip_type_raw": "All Rain",
-  "froude_number": 0.85,
-  "flow_regime": "Partially blocked",
+  "froude_number": 1.57,
+  "flow_regime": "Unblocked / flow-over",
   "freezing_level_ft": null,
   "freezing_level_status": "above_layer",
   "freezing_lower_crossing_ft": null,
@@ -11,35 +11,28 @@
   "wet_bulb_zero_status": "above_layer",
   "wet_bulb_lower_crossing_ft": null,
   "wet_bulb_upper_crossing_ft": null,
-  "mean_lapse_rate_C_km": 9.2,
-  "bulk_shear_kt": 7.0,
-  "mountain_wave_category": "Moderate",
-  "mountain_wave_score": 4,
+  "mean_lapse_rate_C_km": 9.8,
+  "bulk_shear_kt": null,
+  "mountain_wave_category": "Low",
+  "mountain_wave_score": 2,
   "mountain_wave_max_score": 10,
   "mountain_wave_reasons": [
-    "Near-resonant flow regime (Fr 0.85)",
-    "Near Neutral stratification",
-    "Weak cross-barrier flow at summit (3 kt)",
-    "Disorganized flow (125\u00b0 spread)",
-    "Critical level aloft (weak wind at 4734 ft, 8 kt)"
+    "Unblocked flow-over (Fr 1.57)",
+    "Unstable stratification",
+    "Summit wind unavailable",
+    "Somewhat coherent flow (56\u00b0 spread)",
+    "No observed ridge-top direction to compare against"
   ],
-  "mountain_wave_critical_level": {
-    "height_m": 1443.0,
-    "height_ft": 4734.251968503937,
-    "pressure_hPa": 853.9,
-    "wind_speed_kt": 8.3,
-    "wind_dir_deg": 319.0,
-    "reason": "weak wind"
-  },
+  "mountain_wave_critical_level": null,
   "rime_icing_category": "Low",
   "rime_icing_score": 0,
   "rime_icing_max_score": 6,
   "rime_icing_reasons": [
-    "Summit temp outside rime range (16.0 C)",
+    "Summit temp outside rime range (16.3 C)",
     "Moist air at UVM06 (82% RH, 2877 ft)",
-    "Light summit wind (5 kt)",
+    "Summit wind unavailable",
     "Summit above freezing - rime icing not possible"
   ],
-  "observed_at": "2026-07-30T19:18:00+00:00",
-  "generated_at": "2026-07-30T19:29:26.667688+00:00"
+  "observed_at": "2026-07-30T19:33:00+00:00",
+  "generated_at": "2026-07-30T19:45:40.780446+00:00"
 }
