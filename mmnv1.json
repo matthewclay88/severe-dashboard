@@ -1,3 +1,30 @@
+ACIS Query Builder
+Required input
+mmnv1
+Station ID
+por
+Start date
+por
+End date
+snwd
+Elements
+Optional elements builder
+Name
+Interval
+Duration
+Add
+Reduce
+Summary
+Normal
+Group by
+Precision
+Optional input
+Meta options
+Output type
+Parameters (JSON)
+{"sid":"mmnv1","sdate":"por","edate":"por","elems":"snwd"}
+
+Results:
 {
   "meta": {
     "uid": 25107,
