@@ -2694,6 +2694,27 @@ def rime_icing_potential(profile, diagnostics):
 
     # ---------------- Bucket ----------------
 
+    # ---------------- Hard gate: above freezing ----------------
+    #
+    # Rime forms from supercooled LIQUID droplets freezing on contact -
+    # if the summit itself is above 0 C that's not physically possible,
+    # no matter how favorable moisture or wind look. This overrides the
+    # composite to the floor rather than letting points from the other
+    # two ingredients leak through into a misleading Moderate/High call.
+
+    if summit_temp is not None and summit_temp > 0.0:
+
+        reasons.append("Summit above freezing - rime icing not possible")
+
+        return {
+            "score": 0,
+            "max_score": 6,
+            "category": "Low",
+            "reasons": reasons,
+        }
+
+    # ---------------- Bucket ----------------
+
     if moisture_station is None or rh is None:
         category = "Indeterminate"
     elif points <= RIME_LOW_MAX:
@@ -2709,8 +2730,6 @@ def rime_icing_potential(profile, diagnostics):
         "category": category,
         "reasons": reasons,
     }
-
-
 
 def layer_lapse_rates(profile):
     """
