@@ -20,7 +20,7 @@
     "Blocked flow (Fr 0.00)",
     "Stable layer, no distinct ridge-top cap",
     "Moderate cross-barrier flow at summit (22 kt)",
-    "Disorganized flow (156\u00b0 spread)",
+    "Disorganized flow (175\u00b0 spread)",
     "Critical level aloft (weak wind at 13261 ft, 7 kt)"
   ],
   "mountain_wave_critical_level": {
@@ -35,11 +35,11 @@
   "rime_icing_score": 0,
   "rime_icing_max_score": 6,
   "rime_icing_reasons": [
-    "Summit temp outside rime range (12.0 C)",
+    "Summit temp outside rime range (12.1 C)",
     "Near-saturated air at E6664 (98% RH, 958 ft)",
     "Moderate summit wind (24 kt)",
     "Summit above freezing - rime icing not possible"
   ],
-  "observed_at": "2026-07-30T04:18:00+00:00",
-  "generated_at": "2026-07-30T04:22:20.238063+00:00"
+  "observed_at": "2026-07-30T04:33:00+00:00",
+  "generated_at": "2026-07-30T04:37:44.013633+00:00"
 }
