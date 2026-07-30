@@ -20,18 +20,19 @@
     "Blocked flow (Fr 0.07)",
     "Near Neutral stratification",
     "Moderate cross-barrier flow at summit (20 kt)",
-    "Disorganized flow (133\u00b0 spread)",
+    "Disorganized flow (167\u00b0 spread)",
     "No critical level within 3000 m above ridge (RAP)"
   ],
   "mountain_wave_critical_level": null,
-  "rime_icing_category": "Moderate",
-  "rime_icing_score": 3,
+  "rime_icing_category": "Low",
+  "rime_icing_score": 0,
   "rime_icing_max_score": 6,
   "rime_icing_reasons": [
     "Summit temp outside rime range (10.9 C)",
     "Near-saturated air at E6664 (97% RH, 958 ft)",
-    "Moderate summit wind (24 kt)"
+    "Moderate summit wind (24 kt)",
+    "Summit above freezing - rime icing not possible"
   ],
   "observed_at": "2026-07-30T00:48:00+00:00",
-  "generated_at": "2026-07-30T00:51:11.361472+00:00"
+  "generated_at": "2026-07-30T01:00:51.014707+00:00"
 }
