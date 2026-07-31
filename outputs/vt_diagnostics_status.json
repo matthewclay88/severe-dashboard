@@ -20,15 +20,15 @@
     "Froude number unavailable",
     "Near Neutral stratification",
     "Weak cross-barrier flow at summit (15 kt)",
-    "Disorganized flow (101\u00b0 spread)",
-    "Critical level aloft (weak wind at 4770 ft, 8 kt)"
+    "Disorganized flow (161\u00b0 spread)",
+    "Critical level aloft (weak wind at 4777 ft, 8 kt)"
   ],
   "mountain_wave_critical_level": {
-    "height_m": 1454.0,
-    "height_ft": 4770.341207349081,
-    "pressure_hPa": 855.4,
-    "wind_speed_kt": 8.4,
-    "wind_dir_deg": 314.0,
+    "height_m": 1456.0,
+    "height_ft": 4776.902887139107,
+    "pressure_hPa": 855.3,
+    "wind_speed_kt": 8.0,
+    "wind_dir_deg": 317.0,
     "reason": "weak wind"
   },
   "rime_icing_category": "Low",
@@ -41,5 +41,5 @@
     "Summit above freezing - rime icing not possible"
   ],
   "observed_at": "2026-07-31T20:48:00+00:00",
-  "generated_at": "2026-07-31T20:53:15.845593+00:00"
+  "generated_at": "2026-07-31T20:58:41.361317+00:00"
 }
