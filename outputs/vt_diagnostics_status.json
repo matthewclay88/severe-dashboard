@@ -14,16 +14,23 @@
   "mean_lapse_rate_C_km": 4.7,
   "bulk_shear_kt": 14.0,
   "mountain_wave_category": "Low",
-  "mountain_wave_score": 1,
+  "mountain_wave_score": 3,
   "mountain_wave_max_score": 10,
   "mountain_wave_reasons": [
     "Blocked flow (Fr 0.00)",
     "Stable layer, no distinct ridge-top cap",
     "Weak cross-barrier flow at summit (13 kt)",
     "Disorganized flow (176\u00b0 spread)",
-    "No critical level within 3000 m above ridge (RAP)"
+    "Critical level aloft (weak wind at 8241 ft, 10 kt)"
   ],
-  "mountain_wave_critical_level": null,
+  "mountain_wave_critical_level": {
+    "height_m": 2512.0,
+    "height_ft": 8241.469816272966,
+    "pressure_hPa": 752.4,
+    "wind_speed_kt": 9.8,
+    "wind_dir_deg": 313.0,
+    "reason": "weak wind"
+  },
   "rime_icing_category": "Low",
   "rime_icing_score": 0,
   "rime_icing_max_score": 6,
@@ -34,5 +41,5 @@
     "Summit above freezing - rime icing not possible"
   ],
   "observed_at": "2026-07-31T10:48:00+00:00",
-  "generated_at": "2026-07-31T10:53:16.890233+00:00"
+  "generated_at": "2026-07-31T10:58:03.343643+00:00"
 }
