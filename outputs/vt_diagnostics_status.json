@@ -12,7 +12,7 @@
   "wet_bulb_lower_crossing_ft": null,
   "wet_bulb_upper_crossing_ft": null,
   "mean_lapse_rate_C_km": 8.6,
-  "bulk_shear_kt": 14.0,
+  "bulk_shear_kt": 15.0,
   "mountain_wave_category": "Low",
   "mountain_wave_score": 3,
   "mountain_wave_max_score": 10,
@@ -36,10 +36,10 @@
   "rime_icing_max_score": 6,
   "rime_icing_reasons": [
     "Summit temp outside rime range (16.7 C)",
-    "Moist air at UVM06 (78% RH, 2877 ft)",
+    "Moist air at UVM06 (79% RH, 2877 ft)",
     "Moderate summit wind (19 kt)",
     "Summit above freezing - rime icing not possible"
   ],
-  "observed_at": "2026-07-31T23:18:00+00:00",
-  "generated_at": "2026-07-31T23:22:47.983137+00:00"
+  "observed_at": "2026-07-31T23:20:00+00:00",
+  "generated_at": "2026-07-31T23:38:34.510716+00:00"
 }
