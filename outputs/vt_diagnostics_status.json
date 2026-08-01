@@ -1,8 +1,8 @@
 {
   "precip_type": "Rain",
   "precip_type_raw": "All Rain",
-  "froude_number": 0.59,
-  "flow_regime": "Partially blocked",
+  "froude_number": 0.18,
+  "flow_regime": "Blocked",
   "freezing_level_ft": null,
   "freezing_level_status": "above_layer",
   "freezing_lower_crossing_ft": null,
@@ -11,35 +11,35 @@
   "wet_bulb_zero_status": "above_layer",
   "wet_bulb_lower_crossing_ft": null,
   "wet_bulb_upper_crossing_ft": null,
-  "mean_lapse_rate_C_km": 8.8,
-  "bulk_shear_kt": 15.0,
-  "mountain_wave_category": "Moderate",
-  "mountain_wave_score": 4,
+  "mean_lapse_rate_C_km": 8.0,
+  "bulk_shear_kt": 14.0,
+  "mountain_wave_category": "Low",
+  "mountain_wave_score": 2,
   "mountain_wave_max_score": 10,
   "mountain_wave_reasons": [
-    "Near-resonant flow regime (Fr 0.59)",
+    "Blocked flow (Fr 0.18)",
     "Near Neutral stratification",
     "Weak cross-barrier flow at summit (11 kt)",
-    "Disorganized flow (168\u00b0 spread)",
-    "Critical level aloft (weak wind at 4790 ft, 4 kt)"
+    "Disorganized flow (154\u00b0 spread)",
+    "Critical level aloft (weak wind at 4793 ft, 5 kt)"
   ],
   "mountain_wave_critical_level": {
-    "height_m": 1460.0,
-    "height_ft": 4790.02624671916,
-    "pressure_hPa": 855.6,
-    "wind_speed_kt": 4.1,
-    "wind_dir_deg": 225.0,
+    "height_m": 1461.0,
+    "height_ft": 4793.307086614173,
+    "pressure_hPa": 854.9,
+    "wind_speed_kt": 4.7,
+    "wind_dir_deg": 210.0,
     "reason": "weak wind"
   },
   "rime_icing_category": "Low",
   "rime_icing_score": 0,
   "rime_icing_max_score": 6,
   "rime_icing_reasons": [
-    "Summit temp outside rime range (19.4 C)",
+    "Summit temp outside rime range (20.3 C)",
     "Dry air at UVM06 (65% RH, 2877 ft)",
     "Moderate summit wind (12 kt)",
     "Summit above freezing - rime icing not possible"
   ],
-  "observed_at": "2026-08-01T18:33:00+00:00",
-  "generated_at": "2026-08-01T18:44:14.640695+00:00"
+  "observed_at": "2026-08-01T18:48:00+00:00",
+  "generated_at": "2026-08-01T18:52:42.947909+00:00"
 }
