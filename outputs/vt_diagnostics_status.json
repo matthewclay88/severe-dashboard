@@ -1,7 +1,7 @@
 {
   "precip_type": "Rain",
   "precip_type_raw": "All Rain",
-  "froude_number": 0.09,
+  "froude_number": 0.08,
   "flow_regime": "Blocked",
   "freezing_level_ft": null,
   "freezing_level_status": "above_layer",
@@ -17,18 +17,18 @@
   "mountain_wave_score": 3,
   "mountain_wave_max_score": 10,
   "mountain_wave_reasons": [
-    "Blocked flow (Fr 0.09)",
+    "Blocked flow (Fr 0.08)",
     "Stable layer, no distinct ridge-top cap",
     "Weak cross-barrier flow at summit (4 kt)",
     "Disorganized flow (169\u00b0 spread)",
-    "Critical level aloft (weak wind at 7037 ft, 10 kt)"
+    "Critical level aloft (weak wind at 13448 ft, 9 kt)"
   ],
   "mountain_wave_critical_level": {
-    "height_m": 2145.0,
-    "height_ft": 7037.401574803149,
-    "pressure_hPa": 788.7,
-    "wind_speed_kt": 9.9,
-    "wind_dir_deg": 196.0,
+    "height_m": 4099.0,
+    "height_ft": 13448.162729658792,
+    "pressure_hPa": 621.1,
+    "wind_speed_kt": 9.4,
+    "wind_dir_deg": 218.0,
     "reason": "weak wind"
   },
   "rime_icing_category": "Low",
@@ -40,6 +40,6 @@
     "Moderate summit wind (16 kt)",
     "Summit above freezing - rime icing not possible"
   ],
-  "observed_at": "2026-08-02T04:33:00+00:00",
-  "generated_at": "2026-08-02T04:43:46.008446+00:00"
+  "observed_at": "2026-08-02T04:48:00+00:00",
+  "generated_at": "2026-08-02T04:51:22.969521+00:00"
 }
