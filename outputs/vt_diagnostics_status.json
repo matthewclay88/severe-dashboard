@@ -18,9 +18,9 @@
   "mountain_wave_max_score": 10,
   "mountain_wave_reasons": [
     "Blocked flow (Fr 0.23)",
-    "Capping inversion near ridge-top (+0.6 C at 2877 ft)",
+    "Capping inversion near ridge-top (+0.3 C at 2877 ft)",
     "Weak cross-barrier flow at summit (2 kt)",
-    "Disorganized flow (113\u00b0 spread)",
+    "Disorganized flow (172\u00b0 spread)",
     "Critical level aloft (weak wind at 8360 ft, 10 kt)"
   ],
   "mountain_wave_critical_level": {
@@ -36,10 +36,10 @@
   "rime_icing_max_score": 6,
   "rime_icing_reasons": [
     "Summit temp outside rime range (16.8 C)",
-    "Moist air at UVM06 (83% RH, 2877 ft)",
+    "Moist air at UVM06 (84% RH, 2877 ft)",
     "Moderate summit wind (13 kt)",
     "Summit above freezing - rime icing not possible"
   ],
-  "observed_at": "2026-08-02T12:18:00+00:00",
-  "generated_at": "2026-08-02T12:22:45.217366+00:00"
+  "observed_at": "2026-08-02T12:33:00+00:00",
+  "generated_at": "2026-08-02T12:37:48.938092+00:00"
 }
