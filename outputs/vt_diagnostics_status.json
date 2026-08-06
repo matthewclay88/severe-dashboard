@@ -19,7 +19,7 @@
   "mountain_wave_reasons": [
     "Blocked flow (Fr 0.00)",
     "Stable layer, no distinct ridge-top cap",
-    "Weak cross-barrier flow at summit (5 kt)",
+    "Weak cross-barrier flow at summit (7 kt)",
     "Disorganized flow (164\u00b0 spread)",
     "Critical level aloft (weak wind at 4810 ft, 7 kt)"
   ],
@@ -41,5 +41,5 @@
     "Summit above freezing - rime icing not possible"
   ],
   "observed_at": "2026-08-06T10:03:00+00:00",
-  "generated_at": "2026-08-06T10:07:41.273121+00:00"
+  "generated_at": "2026-08-06T10:22:09.807009+00:00"
 }
