@@ -3,15 +3,14 @@
   "source": "mmnv1.json station history (IEM) + NWS Daily Hydromet Report (HYDBTV)",
   "season": null,
   "as_of_date": "2026-08-07",
-  "generated_at": "2026-08-07T05:06:25.874676+00:00",
+  "generated_at": "2026-08-07T05:24:49.413945+00:00",
   "observed_date_label": null,
-  "current_depth_in": 0.0,
-  "current_depth_source": "HYDBTV (version=1)",
+  "current_depth_in": null,
   "normal_depth_in": null,
   "record_high_in": null,
   "record_low_in": null,
   "departure_in": null,
-  "departure_text": "Off-season \u2014 normal unavailable",
+  "departure_text": "Off-season \u2014 no current tracking",
   "rank": null,
   "rank_of": null
 }
