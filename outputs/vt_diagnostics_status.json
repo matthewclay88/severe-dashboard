@@ -18,7 +18,7 @@
   "mountain_wave_max_score": 10,
   "mountain_wave_reasons": [
     "Blocked flow (Fr 0.00)",
-    "Capping inversion near ridge-top (+1.8 C at 2877 ft)",
+    "Capping inversion near ridge-top (+0.2 C at 2877 ft)",
     "Weak cross-barrier flow at summit (12 kt)",
     "Disorganized flow (175\u00b0 spread)",
     "Critical level aloft (weak wind at 3911 ft, 8 kt)"
@@ -40,6 +40,6 @@
     "Moderate summit wind (14 kt)",
     "Summit above freezing - rime icing not possible"
   ],
-  "observed_at": "2026-08-07T04:20:00+00:00",
-  "generated_at": "2026-08-07T04:37:22.607038+00:00"
+  "observed_at": "2026-08-07T04:48:00+00:00",
+  "generated_at": "2026-08-07T04:52:38.376268+00:00"
 }
