@@ -26,8 +26,8 @@
   "mountain_wave_critical_level": {
     "height_m": 1193.0,
     "height_ft": 3914.041994750656,
-    "pressure_hPa": 888.0,
-    "wind_speed_kt": 8.2,
+    "pressure_hPa": 887.8,
+    "wind_speed_kt": 8.1,
     "wind_dir_deg": 195.0,
     "reason": "weak wind"
   },
@@ -41,5 +41,5 @@
     "Summit above freezing - rime icing not possible"
   ],
   "observed_at": "2026-08-07T02:48:00+00:00",
-  "generated_at": "2026-08-07T02:53:46.399270+00:00"
+  "generated_at": "2026-08-07T03:08:34.237443+00:00"
 }
