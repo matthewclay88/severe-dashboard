@@ -11,7 +11,7 @@
   "wet_bulb_zero_status": "above_layer",
   "wet_bulb_lower_crossing_ft": null,
   "wet_bulb_upper_crossing_ft": null,
-  "mean_lapse_rate_C_km": 4.3,
+  "mean_lapse_rate_C_km": 4.4,
   "bulk_shear_kt": 9.0,
   "mountain_wave_category": "Low",
   "mountain_wave_score": 3,
@@ -40,6 +40,6 @@
     "Light summit wind (9 kt)",
     "Summit above freezing - rime icing not possible"
   ],
-  "observed_at": "2026-08-08T08:33:00+00:00",
-  "generated_at": "2026-08-08T08:38:17.487426+00:00"
+  "observed_at": "2026-08-08T08:48:00+00:00",
+  "generated_at": "2026-08-08T08:53:18.899470+00:00"
 }
