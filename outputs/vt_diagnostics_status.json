@@ -21,14 +21,14 @@
     "Near Neutral stratification",
     "Weak cross-barrier flow at summit (0 kt)",
     "Disorganized flow (170\u00b0 spread)",
-    "Critical level aloft (weak wind at 4780 ft, 3 kt)"
+    "Critical level aloft (weak wind at 4780 ft, 1 kt)"
   ],
   "mountain_wave_critical_level": {
     "height_m": 1457.0,
     "height_ft": 4780.18372703412,
     "pressure_hPa": 856.6,
-    "wind_speed_kt": 2.9,
-    "wind_dir_deg": 290.0,
+    "wind_speed_kt": 1.0,
+    "wind_dir_deg": 281.0,
     "reason": "weak wind"
   },
   "rime_icing_category": "Low",
@@ -41,5 +41,5 @@
     "Summit above freezing - rime icing not possible"
   ],
   "observed_at": "2026-08-08T14:48:00+00:00",
-  "generated_at": "2026-08-08T14:53:16.357485+00:00"
+  "generated_at": "2026-08-08T14:54:19.976218+00:00"
 }
