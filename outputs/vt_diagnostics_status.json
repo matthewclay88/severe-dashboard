@@ -21,14 +21,14 @@
     "Capping inversion near ridge-top (+1.2 C at 2877 ft)",
     "Moderate cross-barrier flow at summit (19 kt)",
     "Disorganized flow (179\u00b0 spread)",
-    "Critical level aloft (weak wind at 4721 ft, 9 kt)"
+    "Critical level aloft (weak wind at 4715 ft, 8 kt)"
   ],
   "mountain_wave_critical_level": {
-    "height_m": 1439.0,
-    "height_ft": 4721.128608923885,
-    "pressure_hPa": 852.5,
-    "wind_speed_kt": 9.1,
-    "wind_dir_deg": 281.0,
+    "height_m": 1437.0,
+    "height_ft": 4714.566929133858,
+    "pressure_hPa": 851.9,
+    "wind_speed_kt": 7.7,
+    "wind_dir_deg": 280.0,
     "reason": "weak wind"
   },
   "rime_icing_category": "Low",
@@ -41,5 +41,5 @@
     "Summit above freezing - rime icing not possible"
   ],
   "observed_at": "2026-08-13T06:48:00+00:00",
-  "generated_at": "2026-08-13T06:50:41.932447+00:00"
+  "generated_at": "2026-08-13T06:52:26.228476+00:00"
 }
