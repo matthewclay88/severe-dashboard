@@ -14,13 +14,13 @@
   "mean_lapse_rate_C_km": 11.5,
   "bulk_shear_kt": null,
   "mountain_wave_category": "Indeterminate",
-  "mountain_wave_score": 1,
+  "mountain_wave_score": 0,
   "mountain_wave_max_score": 10,
   "mountain_wave_reasons": [
     "Froude number unavailable",
     "Unstable stratification",
     "Summit wind unavailable",
-    "Somewhat coherent flow (60\u00b0 spread)",
+    "Disorganized flow (80\u00b0 spread)",
     "No observed ridge-top direction to compare against"
   ],
   "mountain_wave_critical_level": null,
@@ -33,6 +33,6 @@
     "Light summit wind (1 kt)",
     "Summit above freezing - rime icing not possible"
   ],
-  "observed_at": "2026-08-13T20:05:00+00:00",
-  "generated_at": "2026-08-13T20:26:13.758243+00:00"
+  "observed_at": "2026-08-13T20:25:00+00:00",
+  "generated_at": "2026-08-13T20:38:32.244813+00:00"
 }
