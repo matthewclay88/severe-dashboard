@@ -29,10 +29,10 @@
   "rime_icing_max_score": 6,
   "rime_icing_reasons": [
     "Summit temp outside rime range (10.9 C)",
-    "Moist air at UVM06 (88% RH, 2877 ft)",
+    "Near-saturated air at UVM05 (91% RH, 1309 ft)",
     "Strong summit wind (30 kt) - rapid accretion",
     "Summit above freezing - rime icing not possible"
   ],
-  "observed_at": "2026-08-14T01:33:00+00:00",
-  "generated_at": "2026-08-14T01:44:12.421441+00:00"
+  "observed_at": "2026-08-14T01:48:00+00:00",
+  "generated_at": "2026-08-14T01:58:27.387312+00:00"
 }
