@@ -11,7 +11,7 @@
   "wet_bulb_zero_status": "above_layer",
   "wet_bulb_lower_crossing_ft": null,
   "wet_bulb_upper_crossing_ft": null,
-  "mean_lapse_rate_C_km": 3.6,
+  "mean_lapse_rate_C_km": 4.6,
   "bulk_shear_kt": 16.0,
   "mountain_wave_category": "Moderate",
   "mountain_wave_score": 4,
@@ -41,5 +41,5 @@
     "Summit above freezing - rime icing not possible"
   ],
   "observed_at": "2026-08-15T10:48:00+00:00",
-  "generated_at": "2026-08-15T10:53:37.183434+00:00"
+  "generated_at": "2026-08-15T11:03:56.559083+00:00"
 }
