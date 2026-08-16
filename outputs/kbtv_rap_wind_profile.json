@@ -1,118 +1,118 @@
 {
   "model": "RAP",
   "site": "KBTV",
-  "run": "260816/1900",
-  "valid_time": "260816/2000",
+  "run": "260816/2000",
+  "valid_time": "260816/2100",
   "top_pressure_hPa": 500.0,
   "levels": [
     {
-      "pressure_hPa": 1007.7,
+      "pressure_hPa": 1006.4,
       "height_m": 67.0,
-      "wind_speed_kt": 9.6,
+      "wind_speed_kt": 9.4,
+      "wind_dir_deg": 142.0
+    },
+    {
+      "pressure_hPa": 1003.4,
+      "height_m": 94.0,
+      "wind_speed_kt": 11.1,
       "wind_dir_deg": 144.0
     },
     {
-      "pressure_hPa": 1004.7,
-      "height_m": 94.0,
-      "wind_speed_kt": 10.9,
-      "wind_dir_deg": 145.0
-    },
-    {
-      "pressure_hPa": 999.1,
+      "pressure_hPa": 997.9,
       "height_m": 142.0,
-      "wind_speed_kt": 11.5,
-      "wind_dir_deg": 146.0
+      "wind_speed_kt": 12.0,
+      "wind_dir_deg": 144.0
     },
     {
-      "pressure_hPa": 989.6,
-      "height_m": 226.0,
-      "wind_speed_kt": 11.9,
-      "wind_dir_deg": 146.0
+      "pressure_hPa": 988.4,
+      "height_m": 225.0,
+      "wind_speed_kt": 12.8,
+      "wind_dir_deg": 147.0
     },
     {
-      "pressure_hPa": 975.5,
+      "pressure_hPa": 974.3,
       "height_m": 350.0,
-      "wind_speed_kt": 12.4,
-      "wind_dir_deg": 148.0
-    },
-    {
-      "pressure_hPa": 957.4,
-      "height_m": 512.0,
-      "wind_speed_kt": 12.7,
+      "wind_speed_kt": 13.6,
       "wind_dir_deg": 149.0
     },
     {
-      "pressure_hPa": 935.7,
-      "height_m": 708.0,
-      "wind_speed_kt": 12.8,
-      "wind_dir_deg": 152.0
+      "pressure_hPa": 956.2,
+      "height_m": 512.0,
+      "wind_speed_kt": 14.2,
+      "wind_dir_deg": 151.0
     },
     {
-      "pressure_hPa": 912.1,
-      "height_m": 926.0,
-      "wind_speed_kt": 12.5,
-      "wind_dir_deg": 159.0
+      "pressure_hPa": 934.6,
+      "height_m": 709.0,
+      "wind_speed_kt": 14.7,
+      "wind_dir_deg": 156.0
     },
     {
-      "pressure_hPa": 886.4,
-      "height_m": 1169.0,
-      "wind_speed_kt": 11.7,
+      "pressure_hPa": 911.0,
+      "height_m": 928.0,
+      "wind_speed_kt": 14.6,
+      "wind_dir_deg": 163.0
+    },
+    {
+      "pressure_hPa": 885.3,
+      "height_m": 1171.0,
+      "wind_speed_kt": 14.2,
       "wind_dir_deg": 183.0
     },
     {
-      "pressure_hPa": 857.8,
-      "height_m": 1446.0,
-      "wind_speed_kt": 11.7,
-      "wind_dir_deg": 195.0
+      "pressure_hPa": 856.7,
+      "height_m": 1449.0,
+      "wind_speed_kt": 13.9,
+      "wind_dir_deg": 198.0
     },
     {
-      "pressure_hPa": 826.2,
-      "height_m": 1761.0,
-      "wind_speed_kt": 12.1,
-      "wind_dir_deg": 202.0
+      "pressure_hPa": 825.1,
+      "height_m": 1764.0,
+      "wind_speed_kt": 13.9,
+      "wind_dir_deg": 210.0
     },
     {
-      "pressure_hPa": 791.6,
-      "height_m": 2118.0,
-      "wind_speed_kt": 13.2,
-      "wind_dir_deg": 194.0
+      "pressure_hPa": 790.6,
+      "height_m": 2121.0,
+      "wind_speed_kt": 13.4,
+      "wind_dir_deg": 213.0
     },
     {
-      "pressure_hPa": 754.1,
-      "height_m": 2519.0,
-      "wind_speed_kt": 14.7,
-      "wind_dir_deg": 192.0
+      "pressure_hPa": 753.1,
+      "height_m": 2523.0,
+      "wind_speed_kt": 13.9,
+      "wind_dir_deg": 213.0
     },
     {
-      "pressure_hPa": 713.5,
-      "height_m": 2975.0,
-      "wind_speed_kt": 15.2,
-      "wind_dir_deg": 211.0
+      "pressure_hPa": 712.6,
+      "height_m": 2978.0,
+      "wind_speed_kt": 16.1,
+      "wind_dir_deg": 224.0
     },
     {
-      "pressure_hPa": 670.0,
-      "height_m": 3489.0,
-      "wind_speed_kt": 17.0,
-      "wind_dir_deg": 234.0
+      "pressure_hPa": 669.2,
+      "height_m": 3491.0,
+      "wind_speed_kt": 18.4,
+      "wind_dir_deg": 237.0
     },
     {
-      "pressure_hPa": 623.4,
-      "height_m": 4073.0,
-      "wind_speed_kt": 22.8,
-      "wind_dir_deg": 251.0
+      "pressure_hPa": 622.7,
+      "height_m": 4076.0,
+      "wind_speed_kt": 23.9,
+      "wind_dir_deg": 252.0
     },
     {
-      "pressure_hPa": 574.1,
-      "height_m": 4735.0,
-      "wind_speed_kt": 30.7,
+      "pressure_hPa": 573.5,
+      "height_m": 4737.0,
+      "wind_speed_kt": 30.1,
       "wind_dir_deg": 257.0
     },
     {
-      "pressure_hPa": 526.4,
-      "height_m": 5421.0,
-      "wind_speed_kt": 33.5,
-      "wind_dir_deg": 259.0
+      "pressure_hPa": 525.9,
+      "height_m": 5423.0,
+      "wind_speed_kt": 34.2,
+      "wind_dir_deg": 260.0
     }
   ],
-  "generated_at": "2026-08-16T21:36:50.295398+00:00"
+  "generated_at": "2026-08-16T21:50:36.295537+00:00"
 }
