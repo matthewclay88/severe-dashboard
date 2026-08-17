@@ -1,7 +1,7 @@
 {
   "precip_type": "Rain",
   "precip_type_raw": "All Rain",
-  "froude_number": 0.15,
+  "froude_number": 0.16,
   "flow_regime": "Blocked",
   "freezing_level_ft": null,
   "freezing_level_status": "above_layer",
@@ -17,7 +17,7 @@
   "mountain_wave_score": 0,
   "mountain_wave_max_score": 10,
   "mountain_wave_reasons": [
-    "Blocked flow (Fr 0.15)",
+    "Blocked flow (Fr 0.16)",
     "Near Neutral stratification",
     "Weak cross-barrier flow at summit (5 kt)",
     "Disorganized flow (180\u00b0 spread)",
@@ -34,5 +34,5 @@
     "Summit above freezing - rime icing not possible"
   ],
   "observed_at": "2026-08-16T23:48:00+00:00",
-  "generated_at": "2026-08-16T23:52:47.578743+00:00"
+  "generated_at": "2026-08-16T23:59:59.767765+00:00"
 }
