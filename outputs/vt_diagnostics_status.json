@@ -20,7 +20,7 @@
     "Blocked flow (Fr 0.00)",
     "Stable layer, no distinct ridge-top cap",
     "Weak cross-barrier flow at summit (2 kt)",
-    "Disorganized flow (110\u00b0 spread)",
+    "Disorganized flow (84\u00b0 spread)",
     "Critical level aloft (weak wind at 5797 ft, 7 kt)"
   ],
   "mountain_wave_critical_level": {
@@ -40,6 +40,6 @@
     "Light summit wind (7 kt)",
     "Summit above freezing - rime icing not possible"
   ],
-  "observed_at": "2026-08-18T03:18:00+00:00",
-  "generated_at": "2026-08-18T03:23:40.715321+00:00"
+  "observed_at": "2026-08-18T03:25:00+00:00",
+  "generated_at": "2026-08-18T03:35:11.398661+00:00"
 }
