@@ -21,15 +21,15 @@
     "Stable layer, no distinct ridge-top cap",
     "Weak cross-barrier flow at summit (4 kt)",
     "Disorganized flow (119\u00b0 spread)",
-    "Critical level aloft (directional reversal at 5801 ft, 10 kt)"
+    "Critical level aloft (weak wind at 5797 ft, 7 kt)"
   ],
   "mountain_wave_critical_level": {
-    "height_m": 1768.0,
-    "height_ft": 5800.524934383202,
+    "height_m": 1767.0,
+    "height_ft": 5797.244094488188,
     "pressure_hPa": 822.3,
-    "wind_speed_kt": 10.1,
-    "wind_dir_deg": 304.0,
-    "reason": "directional reversal"
+    "wind_speed_kt": 7.3,
+    "wind_dir_deg": 323.0,
+    "reason": "weak wind"
   },
   "rime_icing_category": "Low",
   "rime_icing_score": 0,
@@ -40,6 +40,6 @@
     "Light summit wind (5 kt)",
     "Summit above freezing - rime icing not possible"
   ],
-  "observed_at": "2026-08-18T02:48:00+00:00",
-  "generated_at": "2026-08-18T02:53:33.667344+00:00"
+  "observed_at": "2026-08-18T02:50:00+00:00",
+  "generated_at": "2026-08-18T03:07:42.361834+00:00"
 }
