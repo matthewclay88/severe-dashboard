@@ -1,8 +1,8 @@
 {
   "precip_type": "Rain",
   "precip_type_raw": "All Rain",
-  "froude_number": null,
-  "flow_regime": "Unknown",
+  "froude_number": 0.0,
+  "flow_regime": "Blocked",
   "freezing_level_ft": null,
   "freezing_level_status": "above_layer",
   "freezing_lower_crossing_ft": null,
@@ -11,28 +11,35 @@
   "wet_bulb_zero_status": "above_layer",
   "wet_bulb_lower_crossing_ft": null,
   "wet_bulb_upper_crossing_ft": null,
-  "mean_lapse_rate_C_km": 10.7,
-  "bulk_shear_kt": null,
-  "mountain_wave_category": "Indeterminate",
-  "mountain_wave_score": 0,
+  "mean_lapse_rate_C_km": 8.1,
+  "bulk_shear_kt": 18.0,
+  "mountain_wave_category": "Low",
+  "mountain_wave_score": 3,
   "mountain_wave_max_score": 10,
   "mountain_wave_reasons": [
-    "Froude number unavailable",
-    "Unstable stratification",
-    "Summit wind unavailable",
-    "Disorganized flow (78\u00b0 spread)",
-    "No observed ridge-top direction to compare against"
+    "Blocked flow (Fr 0.00)",
+    "Near Neutral stratification",
+    "Moderate cross-barrier flow at summit (16 kt)",
+    "Disorganized flow (124\u00b0 spread)",
+    "Critical level aloft (weak wind at 4731 ft, 6 kt)"
   ],
-  "mountain_wave_critical_level": null,
+  "mountain_wave_critical_level": {
+    "height_m": 1442.0,
+    "height_ft": 4730.971128608923,
+    "pressure_hPa": 858.5,
+    "wind_speed_kt": 5.5,
+    "wind_dir_deg": 260.0,
+    "reason": "weak wind"
+  },
   "rime_icing_category": "Low",
   "rime_icing_score": 0,
   "rime_icing_max_score": 6,
   "rime_icing_reasons": [
-    "Summit temp outside rime range (18.8 C)",
-    "Moist air at UVM05 (83% RH, 1309 ft)",
-    "Light summit wind (0 kt)",
+    "Summit temp outside rime range (12.2 C)",
+    "Moist air at UVM05 (84% RH, 1309 ft)",
+    "Moderate summit wind (18 kt)",
     "Summit above freezing - rime icing not possible"
   ],
-  "observed_at": "2026-08-20T20:25:00+00:00",
-  "generated_at": "2026-08-20T20:53:37.403045+00:00"
+  "observed_at": "2026-08-20T22:48:00+00:00",
+  "generated_at": "2026-08-20T22:52:59.305442+00:00"
 }
