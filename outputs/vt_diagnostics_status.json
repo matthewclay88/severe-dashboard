@@ -20,7 +20,7 @@
     "Near-resonant flow regime (Fr 0.54)",
     "Near Neutral stratification",
     "Moderate cross-barrier flow at summit (15 kt)",
-    "Disorganized flow (160\u00b0 spread)",
+    "Disorganized flow (163\u00b0 spread)",
     "No critical level within 3000 m above ridge (RAP)"
   ],
   "mountain_wave_critical_level": null,
@@ -33,6 +33,6 @@
     "Moderate summit wind (15 kt)",
     "Summit above freezing - rime icing not possible"
   ],
-  "observed_at": "2026-08-23T21:35:00+00:00",
-  "generated_at": "2026-08-23T21:52:14.920540+00:00"
+  "observed_at": "2026-08-23T21:48:00+00:00",
+  "generated_at": "2026-08-23T22:02:54.201001+00:00"
 }
