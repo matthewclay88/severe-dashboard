@@ -12,27 +12,27 @@
   "wet_bulb_lower_crossing_ft": null,
   "wet_bulb_upper_crossing_ft": null,
   "mean_lapse_rate_C_km": 6.6,
-  "bulk_shear_kt": 15.0,
+  "bulk_shear_kt": null,
   "mountain_wave_category": "Low",
   "mountain_wave_score": 0,
   "mountain_wave_max_score": 10,
   "mountain_wave_reasons": [
     "Blocked flow (Fr 0.00)",
     "Near Neutral stratification",
-    "Weak cross-barrier flow at summit (1 kt)",
-    "Disorganized flow (175\u00b0 spread)",
-    "No critical level within 3000 m above ridge (RAP)"
+    "Summit wind unavailable",
+    "Disorganized flow (171\u00b0 spread)",
+    "No observed ridge-top direction to compare against"
   ],
   "mountain_wave_critical_level": null,
   "rime_icing_category": "Low",
   "rime_icing_score": 0,
   "rime_icing_max_score": 6,
   "rime_icing_reasons": [
-    "Summit temp outside rime range (8.9 C)",
+    "Summit temp outside rime range (14.0 C)",
     "Near-saturated air at UVM05 (91% RH, 1309 ft)",
-    "Moderate summit wind (15 kt)",
+    "Light summit wind (0 kt)",
     "Summit above freezing - rime icing not possible"
   ],
-  "observed_at": "2026-08-24T11:33:00+00:00",
-  "generated_at": "2026-08-24T11:38:18.104544+00:00"
+  "observed_at": "2026-08-24T11:30:00+00:00",
+  "generated_at": "2026-08-24T11:47:29.108257+00:00"
 }
