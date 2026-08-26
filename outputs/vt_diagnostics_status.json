@@ -11,7 +11,7 @@
   "wet_bulb_zero_status": "above_layer",
   "wet_bulb_lower_crossing_ft": null,
   "wet_bulb_upper_crossing_ft": null,
-  "mean_lapse_rate_C_km": 4.0,
+  "mean_lapse_rate_C_km": 3.9,
   "bulk_shear_kt": 22.0,
   "mountain_wave_category": "Moderate",
   "mountain_wave_score": 4,
@@ -26,9 +26,9 @@
   "mountain_wave_critical_level": {
     "height_m": 1433.0,
     "height_ft": 4701.443569553806,
-    "pressure_hPa": 858.5,
-    "wind_speed_kt": 7.5,
-    "wind_dir_deg": 280.0,
+    "pressure_hPa": 858.3,
+    "wind_speed_kt": 8.3,
+    "wind_dir_deg": 273.0,
     "reason": "weak wind"
   },
   "rime_icing_category": "Low",
@@ -40,6 +40,6 @@
     "Moderate summit wind (22 kt)",
     "Summit above freezing - rime icing not possible"
   ],
-  "observed_at": "2026-08-26T09:33:00+00:00",
-  "generated_at": "2026-08-26T09:43:48.447327+00:00"
+  "observed_at": "2026-08-26T09:48:00+00:00",
+  "generated_at": "2026-08-26T09:52:56.546121+00:00"
 }
