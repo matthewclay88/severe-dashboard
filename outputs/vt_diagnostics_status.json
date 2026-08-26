@@ -12,7 +12,7 @@
   "wet_bulb_lower_crossing_ft": null,
   "wet_bulb_upper_crossing_ft": null,
   "mean_lapse_rate_C_km": 9.7,
-  "bulk_shear_kt": 4.0,
+  "bulk_shear_kt": 7.0,
   "mountain_wave_category": "Low",
   "mountain_wave_score": 2,
   "mountain_wave_max_score": 10,
@@ -20,15 +20,15 @@
     "Froude number unavailable",
     "Unstable stratification",
     "Weak cross-barrier flow at summit (8 kt)",
-    "Disorganized flow (143\u00b0 spread)",
-    "Critical level aloft (weak wind at 4705 ft, 5 kt)"
+    "Disorganized flow (173\u00b0 spread)",
+    "Critical level aloft (weak wind at 4711 ft, 3 kt)"
   ],
   "mountain_wave_critical_level": {
-    "height_m": 1434.0,
-    "height_ft": 4704.724409448819,
-    "pressure_hPa": 859.1,
-    "wind_speed_kt": 5.1,
-    "wind_dir_deg": 310.0,
+    "height_m": 1436.0,
+    "height_ft": 4711.286089238845,
+    "pressure_hPa": 859.3,
+    "wind_speed_kt": 2.6,
+    "wind_dir_deg": 279.0,
     "reason": "weak wind"
   },
   "rime_icing_category": "Low",
@@ -41,5 +41,5 @@
     "Summit above freezing - rime icing not possible"
   ],
   "observed_at": "2026-08-26T15:48:00+00:00",
-  "generated_at": "2026-08-26T15:57:21.017455+00:00"
+  "generated_at": "2026-08-26T16:04:08.196971+00:00"
 }
