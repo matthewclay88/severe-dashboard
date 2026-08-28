@@ -3,7 +3,7 @@
   "source": "mmnv1.json station history (IEM) + NWS Daily Hydromet Report (HYDBTV)",
   "season": null,
   "as_of_date": "2026-08-28",
-  "generated_at": "2026-08-28T19:45:49.558269+00:00",
+  "generated_at": "2026-08-28T20:00:08.319116+00:00",
   "observed_date_label": null,
   "current_depth_in": 0.0,
   "current_depth_source": "HYDBTV (version=2)",
