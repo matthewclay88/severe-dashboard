@@ -1,118 +1,118 @@
 {
   "model": "RAP",
   "site": "KBTV",
-  "run": "260901/0200",
-  "valid_time": "260901/0300",
+  "run": "260901/0300",
+  "valid_time": "260901/0400",
   "top_pressure_hPa": 500.0,
   "levels": [
     {
-      "pressure_hPa": 1010.2,
-      "height_m": 66.0,
-      "wind_speed_kt": 2.1,
+      "pressure_hPa": 1010.0,
+      "height_m": 67.0,
+      "wind_speed_kt": 1.1,
       "wind_dir_deg": 22.0
     },
     {
-      "pressure_hPa": 1007.2,
-      "height_m": 92.0,
-      "wind_speed_kt": 2.3,
-      "wind_dir_deg": 31.0
+      "pressure_hPa": 1007.0,
+      "height_m": 93.0,
+      "wind_speed_kt": 1.4,
+      "wind_dir_deg": 45.0
     },
     {
-      "pressure_hPa": 1001.6,
+      "pressure_hPa": 1001.5,
       "height_m": 140.0,
-      "wind_speed_kt": 3.9,
-      "wind_dir_deg": 45.0
+      "wind_speed_kt": 2.9,
+      "wind_dir_deg": 70.0
     },
     {
-      "pressure_hPa": 992.0,
+      "pressure_hPa": 991.9,
       "height_m": 223.0,
-      "wind_speed_kt": 5.4,
-      "wind_dir_deg": 38.0
+      "wind_speed_kt": 4.4,
+      "wind_dir_deg": 67.0
     },
     {
-      "pressure_hPa": 977.9,
+      "pressure_hPa": 977.8,
       "height_m": 346.0,
-      "wind_speed_kt": 5.3,
-      "wind_dir_deg": 33.0
+      "wind_speed_kt": 4.7,
+      "wind_dir_deg": 55.0
     },
     {
-      "pressure_hPa": 959.8,
+      "pressure_hPa": 959.7,
       "height_m": 507.0,
-      "wind_speed_kt": 3.6,
-      "wind_dir_deg": 45.0
+      "wind_speed_kt": 4.1,
+      "wind_dir_deg": 59.0
     },
     {
-      "pressure_hPa": 938.1,
+      "pressure_hPa": 938.0,
       "height_m": 704.0,
-      "wind_speed_kt": 2.2,
-      "wind_dir_deg": 117.0
+      "wind_speed_kt": 2.9,
+      "wind_dir_deg": 110.0
     },
     {
-      "pressure_hPa": 914.4,
+      "pressure_hPa": 914.3,
       "height_m": 922.0,
-      "wind_speed_kt": 4.2,
-      "wind_dir_deg": 156.0
+      "wind_speed_kt": 4.1,
+      "wind_dir_deg": 149.0
     },
     {
       "pressure_hPa": 888.6,
-      "height_m": 1165.0,
-      "wind_speed_kt": 5.5,
-      "wind_dir_deg": 162.0
+      "height_m": 1164.0,
+      "wind_speed_kt": 4.4,
+      "wind_dir_deg": 151.0
     },
     {
-      "pressure_hPa": 859.9,
-      "height_m": 1441.0,
-      "wind_speed_kt": 3.5,
-      "wind_dir_deg": 177.0
+      "pressure_hPa": 859.8,
+      "height_m": 1442.0,
+      "wind_speed_kt": 1.6,
+      "wind_dir_deg": 159.0
     },
     {
       "pressure_hPa": 828.0,
       "height_m": 1757.0,
-      "wind_speed_kt": 4.4,
-      "wind_dir_deg": 257.0
+      "wind_speed_kt": 3.4,
+      "wind_dir_deg": 286.0
     },
     {
       "pressure_hPa": 793.1,
       "height_m": 2115.0,
-      "wind_speed_kt": 7.2,
-      "wind_dir_deg": 294.0
+      "wind_speed_kt": 6.7,
+      "wind_dir_deg": 303.0
     },
     {
       "pressure_hPa": 755.2,
       "height_m": 2519.0,
-      "wind_speed_kt": 10.3,
-      "wind_dir_deg": 293.0
+      "wind_speed_kt": 10.2,
+      "wind_dir_deg": 288.0
     },
     {
-      "pressure_hPa": 714.4,
-      "height_m": 2973.0,
-      "wind_speed_kt": 13.8,
-      "wind_dir_deg": 280.0
+      "pressure_hPa": 714.3,
+      "height_m": 2974.0,
+      "wind_speed_kt": 14.2,
+      "wind_dir_deg": 274.0
     },
     {
       "pressure_hPa": 670.5,
       "height_m": 3487.0,
-      "wind_speed_kt": 18.5,
-      "wind_dir_deg": 280.0
+      "wind_speed_kt": 19.1,
+      "wind_dir_deg": 279.0
     },
     {
       "pressure_hPa": 623.7,
       "height_m": 4067.0,
-      "wind_speed_kt": 22.7,
+      "wind_speed_kt": 23.5,
       "wind_dir_deg": 277.0
     },
     {
-      "pressure_hPa": 574.5,
-      "height_m": 4718.0,
-      "wind_speed_kt": 27.4,
-      "wind_dir_deg": 271.0
+      "pressure_hPa": 574.4,
+      "height_m": 4720.0,
+      "wind_speed_kt": 28.4,
+      "wind_dir_deg": 272.0
     },
     {
-      "pressure_hPa": 526.8,
-      "height_m": 5396.0,
-      "wind_speed_kt": 31.7,
-      "wind_dir_deg": 269.0
+      "pressure_hPa": 526.7,
+      "height_m": 5397.0,
+      "wind_speed_kt": 34.0,
+      "wind_dir_deg": 271.0
     }
   ],
-  "generated_at": "2026-09-01T04:35:30.526538+00:00"
+  "generated_at": "2026-09-01T04:50:11.054038+00:00"
 }
