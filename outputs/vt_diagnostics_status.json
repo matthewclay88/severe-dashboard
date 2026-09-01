@@ -26,20 +26,20 @@
   "mountain_wave_critical_level": {
     "height_m": 1435.0,
     "height_ft": 4708.005249343832,
-    "pressure_hPa": 858.8,
+    "pressure_hPa": 859.1,
     "wind_speed_kt": 7.7,
-    "wind_dir_deg": 108.0,
+    "wind_dir_deg": 115.0,
     "reason": "weak wind"
   },
   "rime_icing_category": "Low",
   "rime_icing_score": 0,
   "rime_icing_max_score": 6,
   "rime_icing_reasons": [
-    "Summit temp outside rime range (12.2 C)",
+    "Summit temp outside rime range (13.3 C)",
     "Dry air at UVM05 (72% RH, 1309 ft)",
     "Moderate summit wind (16 kt)",
     "Summit above freezing - rime icing not possible"
   ],
-  "observed_at": "2026-09-01T13:48:00+00:00",
-  "generated_at": "2026-09-01T14:00:00.856231+00:00"
+  "observed_at": "2026-09-01T14:03:00+00:00",
+  "generated_at": "2026-09-01T14:06:35.785448+00:00"
 }
