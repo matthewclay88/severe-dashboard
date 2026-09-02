@@ -1,8 +1,8 @@
 {
   "precip_type": "Rain",
   "precip_type_raw": "All Rain",
-  "froude_number": 0.57,
-  "flow_regime": "Partially blocked",
+  "froude_number": null,
+  "flow_regime": "Unknown",
   "freezing_level_ft": null,
   "freezing_level_status": "above_layer",
   "freezing_lower_crossing_ft": null,
@@ -12,15 +12,15 @@
   "wet_bulb_lower_crossing_ft": null,
   "wet_bulb_upper_crossing_ft": null,
   "mean_lapse_rate_C_km": 9.6,
-  "bulk_shear_kt": 12.0,
-  "mountain_wave_category": "Moderate",
-  "mountain_wave_score": 4,
+  "bulk_shear_kt": 8.0,
+  "mountain_wave_category": "Low",
+  "mountain_wave_score": 2,
   "mountain_wave_max_score": 10,
   "mountain_wave_reasons": [
-    "Near-resonant flow regime (Fr 0.57)",
+    "Froude number unavailable",
     "Unstable stratification",
-    "Weak cross-barrier flow at summit (11 kt)",
-    "Disorganized flow (163\u00b0 spread)",
+    "Weak cross-barrier flow at summit (10 kt)",
+    "Disorganized flow (179\u00b0 spread)",
     "Critical level aloft (weak wind at 6946 ft, 8 kt)"
   ],
   "mountain_wave_critical_level": {
@@ -35,11 +35,11 @@
   "rime_icing_score": 0,
   "rime_icing_max_score": 6,
   "rime_icing_reasons": [
-    "Summit temp outside rime range (10.6 C)",
-    "Moist air at UVM05 (83% RH, 1309 ft)",
-    "Moderate summit wind (11 kt)",
+    "Summit temp outside rime range (10.7 C)",
+    "Moist air at UVM05 (81% RH, 1309 ft)",
+    "Moderate summit wind (10 kt)",
     "Summit above freezing - rime icing not possible"
   ],
-  "observed_at": "2026-09-02T13:50:00+00:00",
-  "generated_at": "2026-09-02T14:07:19.429855+00:00"
+  "observed_at": "2026-09-02T14:18:00+00:00",
+  "generated_at": "2026-09-02T14:23:16.169017+00:00"
 }
