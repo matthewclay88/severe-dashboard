@@ -1,8 +1,8 @@
 {
   "precip_type": "Rain",
   "precip_type_raw": "All Rain",
-  "froude_number": 0.8,
-  "flow_regime": "Partially blocked",
+  "froude_number": 0.26,
+  "flow_regime": "Blocked",
   "freezing_level_ft": null,
   "freezing_level_status": "above_layer",
   "freezing_lower_crossing_ft": null,
@@ -11,35 +11,35 @@
   "wet_bulb_zero_status": "above_layer",
   "wet_bulb_lower_crossing_ft": null,
   "wet_bulb_upper_crossing_ft": null,
-  "mean_lapse_rate_C_km": 9.4,
-  "bulk_shear_kt": 14.0,
-  "mountain_wave_category": "Moderate",
-  "mountain_wave_score": 5,
+  "mean_lapse_rate_C_km": 9.5,
+  "bulk_shear_kt": 17.0,
+  "mountain_wave_category": "Low",
+  "mountain_wave_score": 3,
   "mountain_wave_max_score": 10,
   "mountain_wave_reasons": [
-    "Near-resonant flow regime (Fr 0.80)",
+    "Blocked flow (Fr 0.26)",
     "Near Neutral stratification",
     "Moderate cross-barrier flow at summit (16 kt)",
-    "Disorganized flow (103\u00b0 spread)",
-    "Critical level aloft (weak wind at 9820 ft, 9 kt)"
+    "Disorganized flow (173\u00b0 spread)",
+    "Critical level aloft (directional reversal at 13409 ft, 19 kt)"
   ],
   "mountain_wave_critical_level": {
-    "height_m": 2993.0,
-    "height_ft": 9819.553805774278,
-    "pressure_hPa": 713.7,
-    "wind_speed_kt": 8.6,
-    "wind_dir_deg": 216.0,
-    "reason": "weak wind"
+    "height_m": 4087.0,
+    "height_ft": 13408.792650918635,
+    "pressure_hPa": 623.4,
+    "wind_speed_kt": 18.6,
+    "wind_dir_deg": 240.0,
+    "reason": "directional reversal"
   },
   "rime_icing_category": "Low",
   "rime_icing_score": 0,
   "rime_icing_max_score": 6,
   "rime_icing_reasons": [
-    "Summit temp outside rime range (11.8 C)",
+    "Summit temp outside rime range (11.7 C)",
     "Moist air at UVM05 (78% RH, 1309 ft)",
     "Moderate summit wind (16 kt)",
     "Summit above freezing - rime icing not possible"
   ],
-  "observed_at": "2026-09-02T21:48:00+00:00",
-  "generated_at": "2026-09-02T21:52:44.312669+00:00"
+  "observed_at": "2026-09-02T22:03:00+00:00",
+  "generated_at": "2026-09-02T22:07:38.734236+00:00"
 }
