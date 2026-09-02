@@ -1,118 +1,118 @@
 {
   "model": "RAP",
   "site": "KBTV",
-  "run": "260902/0700",
-  "valid_time": "260902/0800",
+  "run": "260902/0800",
+  "valid_time": "260902/0900",
   "top_pressure_hPa": 500.0,
   "levels": [
     {
-      "pressure_hPa": 1010.6,
-      "height_m": 66.0,
-      "wind_speed_kt": 8.1,
-      "wind_dir_deg": 147.0
+      "pressure_hPa": 1010.4,
+      "height_m": 67.0,
+      "wind_speed_kt": 10.7,
+      "wind_dir_deg": 148.0
     },
     {
       "pressure_hPa": 1007.4,
       "height_m": 93.0,
-      "wind_speed_kt": 8.8,
-      "wind_dir_deg": 147.0
+      "wind_speed_kt": 11.8,
+      "wind_dir_deg": 149.0
     },
     {
       "pressure_hPa": 1001.9,
       "height_m": 140.0,
-      "wind_speed_kt": 10.3,
-      "wind_dir_deg": 146.0
+      "wind_speed_kt": 13.1,
+      "wind_dir_deg": 150.0
     },
     {
       "pressure_hPa": 992.3,
       "height_m": 223.0,
-      "wind_speed_kt": 12.5,
-      "wind_dir_deg": 147.0
-    },
-    {
-      "pressure_hPa": 978.2,
-      "height_m": 346.0,
-      "wind_speed_kt": 15.7,
+      "wind_speed_kt": 15.3,
       "wind_dir_deg": 151.0
     },
     {
-      "pressure_hPa": 960.0,
+      "pressure_hPa": 978.1,
+      "height_m": 347.0,
+      "wind_speed_kt": 17.3,
+      "wind_dir_deg": 153.0
+    },
+    {
+      "pressure_hPa": 959.9,
       "height_m": 507.0,
-      "wind_speed_kt": 17.6,
-      "wind_dir_deg": 155.0
+      "wind_speed_kt": 19.1,
+      "wind_dir_deg": 157.0
     },
     {
       "pressure_hPa": 938.2,
       "height_m": 702.0,
-      "wind_speed_kt": 16.8,
-      "wind_dir_deg": 162.0
+      "wind_speed_kt": 18.3,
+      "wind_dir_deg": 165.0
     },
     {
       "pressure_hPa": 914.4,
       "height_m": 920.0,
-      "wind_speed_kt": 14.6,
-      "wind_dir_deg": 166.0
+      "wind_speed_kt": 14.8,
+      "wind_dir_deg": 175.0
     },
     {
       "pressure_hPa": 888.6,
       "height_m": 1162.0,
-      "wind_speed_kt": 12.6,
-      "wind_dir_deg": 181.0
+      "wind_speed_kt": 11.7,
+      "wind_dir_deg": 195.0
     },
     {
       "pressure_hPa": 859.7,
       "height_m": 1439.0,
-      "wind_speed_kt": 8.9,
-      "wind_dir_deg": 203.0
+      "wind_speed_kt": 10.1,
+      "wind_dir_deg": 216.0
     },
     {
-      "pressure_hPa": 827.9,
-      "height_m": 1755.0,
-      "wind_speed_kt": 5.9,
-      "wind_dir_deg": 238.0
+      "pressure_hPa": 827.8,
+      "height_m": 1756.0,
+      "wind_speed_kt": 6.9,
+      "wind_dir_deg": 241.0
     },
     {
-      "pressure_hPa": 793.0,
-      "height_m": 2114.0,
-      "wind_speed_kt": 7.1,
-      "wind_dir_deg": 279.0
+      "pressure_hPa": 792.9,
+      "height_m": 2115.0,
+      "wind_speed_kt": 6.4,
+      "wind_dir_deg": 272.0
     },
     {
       "pressure_hPa": 755.0,
       "height_m": 2521.0,
-      "wind_speed_kt": 7.6,
-      "wind_dir_deg": 289.0
+      "wind_speed_kt": 7.4,
+      "wind_dir_deg": 276.0
     },
     {
       "pressure_hPa": 714.1,
-      "height_m": 2978.0,
-      "wind_speed_kt": 10.1,
-      "wind_dir_deg": 286.0
+      "height_m": 2979.0,
+      "wind_speed_kt": 13.0,
+      "wind_dir_deg": 280.0
     },
     {
-      "pressure_hPa": 670.3,
-      "height_m": 3492.0,
-      "wind_speed_kt": 17.7,
+      "pressure_hPa": 670.2,
+      "height_m": 3496.0,
+      "wind_speed_kt": 21.9,
       "wind_dir_deg": 285.0
     },
     {
       "pressure_hPa": 623.5,
-      "height_m": 4074.0,
+      "height_m": 4077.0,
       "wind_speed_kt": 24.3,
-      "wind_dir_deg": 287.0
-    },
-    {
-      "pressure_hPa": 574.3,
-      "height_m": 4725.0,
-      "wind_speed_kt": 25.4,
       "wind_dir_deg": 286.0
     },
     {
+      "pressure_hPa": 574.2,
+      "height_m": 4730.0,
+      "wind_speed_kt": 25.6,
+      "wind_dir_deg": 284.0
+    },
+    {
       "pressure_hPa": 526.6,
-      "height_m": 5401.0,
-      "wind_speed_kt": 28.9,
-      "wind_dir_deg": 280.0
+      "height_m": 5405.0,
+      "wind_speed_kt": 31.1,
+      "wind_dir_deg": 279.0
     }
   ],
-  "generated_at": "2026-09-02T09:35:55.939689+00:00"
+  "generated_at": "2026-09-02T09:50:57.715727+00:00"
 }
