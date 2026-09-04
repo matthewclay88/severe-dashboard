@@ -55,8 +55,14 @@ drive_service = build("drive", "v3", credentials=creds)
 # Confirmed available model folders: rap, hrrr, nam, nam4km, namm, gfs, gfsm
 # ============================================================
 
-MODELS = ["rap", "hrrr", "nam", "gfs"]
-MAX_FORECAST_HOURS = 60  # cap per model; NAM/GFS otherwise run out to 84-384h
+MODELS = ["rap", "hrrr", "nam", "gfs", "rrfs"]
+MAX_FORECAST_HOURS = 60  # default cap per model; NAM/GFS otherwise run out to 84-384h
+
+# Per-model overrides of MAX_FORECAST_HOURS. Any model not listed here falls
+# back to the default above.
+MODEL_MAX_FORECAST_HOURS = {
+    "rrfs": 84,
+}
 REPO_OUTPUT_DIR = Path("outputs")
 WIND_PROFILE_TOP_PRES_HPA = 500.0  # well above any realistic critical level
 
@@ -1979,9 +1985,10 @@ for model in MODELS:
         stim_locations = [i for i, line in enumerate(lines) if line.startswith("STIM =")]
         print(f"  Found {len(stim_locations)} forecast hours")
 
+        model_max_hours = MODEL_MAX_FORECAST_HOURS.get(model, MAX_FORECAST_HOURS)
         n_hours = len(stim_locations) - 1
-        if n_hours > MAX_FORECAST_HOURS:
-            n_hours = MAX_FORECAST_HOURS
+        if n_hours > model_max_hours:
+            n_hours = model_max_hours
 
         for hour in range(n_hours):
             start = stim_locations[hour]
