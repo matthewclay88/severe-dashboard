@@ -20,7 +20,7 @@
     "Froude number unavailable",
     "Unstable stratification",
     "Weak cross-barrier flow at summit (15 kt)",
-    "Disorganized flow (128\u00b0 spread)",
+    "Disorganized flow (174\u00b0 spread)",
     "No critical level within 3000 m above ridge (RAP)"
   ],
   "mountain_wave_critical_level": null,
@@ -33,6 +33,6 @@
     "Moderate summit wind (15 kt)",
     "Summit above freezing - rime icing not possible"
   ],
-  "observed_at": "2026-09-06T19:33:00+00:00",
-  "generated_at": "2026-09-06T19:48:18.226882+00:00"
+  "observed_at": "2026-09-06T19:40:00+00:00",
+  "generated_at": "2026-09-06T20:01:28.632195+00:00"
 }
