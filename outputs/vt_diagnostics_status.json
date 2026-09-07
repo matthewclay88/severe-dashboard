@@ -20,7 +20,7 @@
     "Blocked flow (Fr 0.08)",
     "Stable layer, no distinct ridge-top cap",
     "Summit wind unavailable",
-    "Disorganized flow (127\u00b0 spread)",
+    "Disorganized flow (140\u00b0 spread)",
     "No observed ridge-top direction to compare against"
   ],
   "mountain_wave_critical_level": null,
@@ -33,6 +33,6 @@
     "Summit wind unavailable",
     "Summit above freezing - rime icing not possible"
   ],
-  "observed_at": "2026-09-07T03:40:00+00:00",
-  "generated_at": "2026-09-07T03:55:04.562005+00:00"
+  "observed_at": "2026-09-07T04:03:00+00:00",
+  "generated_at": "2026-09-07T04:10:35.833140+00:00"
 }
