@@ -20,7 +20,7 @@
     "Blocked flow (Fr 0.00)",
     "Near Neutral stratification",
     "Weak cross-barrier flow at summit (7 kt)",
-    "Disorganized flow (111\u00b0 spread)",
+    "Disorganized flow (151\u00b0 spread)",
     "No critical level within 3000 m above ridge (RAP)"
   ],
   "mountain_wave_critical_level": null,
@@ -33,6 +33,6 @@
     "Light summit wind (7 kt)",
     "Summit above freezing - rime icing not possible"
   ],
-  "observed_at": "2026-09-08T17:18:00+00:00",
-  "generated_at": "2026-09-08T17:26:07.844236+00:00"
+  "observed_at": "2026-09-08T17:20:00+00:00",
+  "generated_at": "2026-09-08T17:38:48.620895+00:00"
 }
