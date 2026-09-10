@@ -3,16 +3,15 @@
   "source": "mmnv1.json station history (IEM) + NWS Daily Hydromet Report (HYDBTV)",
   "season": "2026-2027",
   "as_of_date": "2026-09-10",
-  "generated_at": "2026-09-10T13:43:55.382899+00:00",
+  "generated_at": "2026-09-10T13:46:44.951897+00:00",
   "observed_date_label": null,
-  "current_depth_in": 0.0,
-  "current_depth_source": "HYDBTV (version=3)",
+  "current_depth_in": null,
+  "current_depth_source": null,
   "normal_depth_in": null,
   "record_high_in": null,
   "record_low_in": null,
   "departure_in": null,
-  "departure_text": "Normal unavailable",
+  "departure_text": "No data reported yet this season",
   "rank": null,
-  "rank_of": null,
-  "deepest_season_on_this_date": null
+  "rank_of": null
 }
